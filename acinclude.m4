@@ -251,6 +251,7 @@ AC_DEFUN([OVS_CHECK_P4], [
   mkdir -p $p4outputdir
   p4c-behavioral $p4inputfile --gen-dir $p4outputdir/temp --plugin ovs
   mv $p4outputdir/temp/plugin/ovs/inc/* $p4outputdir
+  mv $p4outputdir/temp/dict.pickle $p4outputdir
   rm -rf $p4outputdir/temp
 ])
 
