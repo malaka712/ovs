@@ -12,8 +12,9 @@ then
 fi
 patch -p1 -N < ../../setup-scripts/dpdk.patch
 make -j 8 install T=x86_64-native-linuxapp-gcc
+cd ../../
 
-cd ../
+cd setup-scripts
 source ./setup-env-vars.sh
 
 cd ../
