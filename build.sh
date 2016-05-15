@@ -10,12 +10,12 @@ then
 	echo "Please run git submodule update --init"
 	exit 1
 fi
-patch -p1 -N < ../../setup-scripts/dpdk.patch
+patch -p1 -N < ../../setup-scripts/patches/dpdk.patch
 make -j 8 install T=x86_64-native-linuxapp-gcc
 cd ../../
 
 cd setup-scripts
-source ./setup-env-vars.sh
+source ./helpers/setup-vars-ovs-dpdk.sh
 
 cd ../
 ./boot.sh
