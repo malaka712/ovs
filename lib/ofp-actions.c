@@ -381,6 +381,14 @@ static char *OVS_WARN_UNUSED_RESULT ofpacts_parse(
     char *str, struct ofpbuf *ofpacts, enum ofputil_protocol *usable_protocols,
     bool allow_instructions, enum ofpact_type outer_action);
 
+/* @p4: */
+static void
+set_field_to_set_field(const struct ofpact_set_field *sf,
+                       enum ofp_version ofp_version, struct ofpbuf *out);
+static char * OVS_WARN_UNUSED_RESULT
+set_field_parse__(char *arg, struct ofpbuf *ofpacts,
+                  enum ofputil_protocol *usable_protocols);
+
 /* Pull off existing actions or instructions. Used by nesting actions to keep
  * ofpacts_parse() oblivious of actions nesting.
  *
@@ -830,8 +838,7 @@ format_DEPARSE(const struct ofpact_null *a OVS_UNUSED, struct ds *s)
 
 // @P4:
 static enum ofperr
-decode_OFPAT_RAW_ADD_HEADER(uint32_t header_id,
-		enum ofp_version ofp_version OVS_UNUSED, struct ofpbuf *out)
+decode_OFPAT_RAW_ADD_HEADER(uint32_t header_id, struct ofpbuf *out)
 {
 	struct ofpact_add_header *ah;
 
@@ -873,8 +880,7 @@ format_ADD_HEADER(const struct ofpact_add_header *ah, struct ds *s)
 
 // @P4:
 static enum ofperr
-decode_OFPAT_RAW_REMOVE_HEADER(uint32_t header_id,
-		enum ofp_version ofp_version OVS_UNUSED, struct ofpbuf *out)
+decode_OFPAT_RAW_REMOVE_HEADER(uint32_t header_id, struct ofpbuf *out)
 {
 	struct ofpact_remove_header *rh;
 
@@ -999,15 +1005,14 @@ decode_calc_fields_verify(const struct ofp_action_calc_fields *a,
     }
 
     cf = ofpacts->header;
-
-    ofpact_finish(ofpacts, &cf->ofpact);
+    ofpact_update_len(ofpacts, &cf->ofpact);
 
     return error;
 }
 
 static enum ofperr
 decode_OFPAT_RAW_CALC_FIELDS_VERIFY(const struct ofp_action_calc_fields *a,
-		enum ofp_version ofp_version OVS_UNUSED, struct ofpbuf *out)
+                                    struct ofpbuf *out)
 {
     return decode_calc_fields_verify(a, out);
 }
@@ -1066,7 +1071,7 @@ calc_fields_verify_parse__(const char *s, char **save_ptr,
         cf = ofpacts->header;
         cf->n_fields++;
     }
-    ofpact_finish(ofpacts, &cf->ofpact);
+    ofpact_update_len(ofpacts, &cf->ofpact);
 
     if (!strcasecmp(algorithm, "csum16")) {
         cf->algorithm = CF_ALGO_CSUM16;
@@ -1185,14 +1190,14 @@ decode_calc_fields_update(const struct ofp_action_calc_fields *a,
     }
 
     cf = ofpacts->header;
-    ofpact_finish(ofpacts, &cf->ofpact);
+    ofpact_update_len(ofpacts, &cf->ofpact);
 
     return error;
 }
 
 static enum ofperr
 decode_OFPAT_RAW_CALC_FIELDS_UPDATE(const struct ofp_action_calc_fields *a,
-		enum ofp_version ofp_version OVS_UNUSED, struct ofpbuf *out)
+		                            struct ofpbuf *out)
 {
     return decode_calc_fields_update(a, out);
 }
@@ -1251,7 +1256,7 @@ calc_fields_update_parse__(const char *s, char **save_ptr,
         cf = ofpacts->header;
         cf->n_fields++;
     }
-    ofpact_finish(ofpacts, &cf->ofpact);
+    ofpact_update_len(ofpacts, &cf->ofpact);
 
     if (!strcasecmp(algorithm, "csum16")) {
         cf->algorithm = CF_ALGO_CSUM16;
@@ -1386,7 +1391,7 @@ decode_ofpat_add_to_field(const struct ofp_action_add_to_field *a,
 
 static enum ofperr
 decode_OFPAT_RAW_ADD_TO_FIELD(const struct ofp_action_add_to_field *a,
-		enum ofp_version ofp_version OVS_UNUSED, struct ofpbuf *ofpacts)
+                              struct ofpbuf *ofpacts)
 {
     return decode_ofpat_add_to_field(a, true, ofpacts);
 }
@@ -1523,7 +1528,7 @@ decode_ofpat_sub_from_field(const struct ofp_action_sub_from_field *a,
 
 static enum ofperr
 decode_OFPAT_RAW_SUB_FROM_FIELD(const struct ofp_action_sub_from_field *a,
-		enum ofp_version ofp_version OVS_UNUSED, struct ofpbuf *ofpacts)
+		                        struct ofpbuf *ofpacts)
 {
     return decode_ofpat_sub_from_field(a, true, ofpacts);
 }
