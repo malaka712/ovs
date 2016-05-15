@@ -33,6 +33,10 @@
 #include "util.h"
 #include "openvswitch/vlog.h"
 
+// @P4:
+#include <errno.h>
+#include "p4/src/action/ofp-actions.h"
+
 VLOG_DEFINE_THIS_MODULE(ofp_actions);
 
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
@@ -295,6 +299,36 @@ enum ofp_raw_action_type {
 
     /* NX1.0+(255): void. */
     NXAST_RAW_DEBUG_RECIRC,
+
+/* ## ------------- ## */
+/* ## @P4: actions. ## */
+/* ## ------------- ## */
+
+	/* OF1.5+(30): void. */
+	OFPAT_RAW_DEPARSE,
+
+	/* OF1.5+(31): uint32_t. */
+	OFPAT_RAW_ADD_HEADER,
+
+	/* OF1.5+(32): uint32_t. */
+	OFPAT_RAW_REMOVE_HEADER,
+
+	/* OF1.5+(33): void. */
+	OFPAT_RAW_MODIFY_FIELD,
+
+	/* OF1.5+(34): struct ofp_action_calc_fields, ... */
+	OFPAT_RAW_CALC_FIELDS_VERIFY,
+
+	/* OF1.5+(35): struct ofp_action_calc_fields, ... */
+	OFPAT_RAW_CALC_FIELDS_UPDATE,
+
+	/* OF1.5+(36): struct ofp_action_add_to_field, ... */
+	OFPAT_RAW_ADD_TO_FIELD,
+
+	/* OF1.5+(37): struct ofp_action_sub_from_field, ... */
+	OFPAT_RAW_SUB_FROM_FIELD,
+
+#include "p4/src/action/types.h" // @P4:
 };
 
 /* OpenFlow actions are always a multiple of 8 bytes in length. */
@@ -721,6 +755,853 @@ format_ENQUEUE(const struct ofpact_enqueue *a, struct ds *s)
     ds_put_format(s, "enqueue:");
     ofputil_format_port(a->port, s);
     ds_put_format(s, ":%"PRIu32, a->queue);
+}
+
+// @P4:
+static char *
+parse_from_integer_string(const char *s, const char *name, const uint32_t n_bytes,
+                          uint8_t *valuep, uint8_t *maskp)
+{
+    char *tail;
+    const char *err_str = "";
+    int err;
+
+    err = parse_int_string(s, valuep, n_bytes, &tail);
+    if (err || (*tail != '\0' && *tail != '/')) {
+        err_str = "value";
+        goto syntax_error;
+    }
+
+    if (*tail == '/') {
+        err = parse_int_string(tail + 1, maskp, n_bytes, &tail);
+        if (err || *tail != '\0') {
+            err_str = "mask";
+            goto syntax_error;
+        }
+    } else {
+        memset(maskp, 0xff, n_bytes);
+    }
+
+    return NULL;
+
+syntax_error:
+    if (err == ERANGE) {
+        return xasprintf("%s: %s too large for %u-byte field %s",
+                         s, err_str, n_bytes, name);
+    } else {
+        return xasprintf("%s: bad syntax for %s %s", s, name, err_str);
+    }
+}
+
+// @P4:
+OVS_OFP_ACTION_STRUCTS
+OVS_OFP_FUNCS
+
+// @P4:
+static enum ofperr
+decode_OFPAT_RAW_DEPARSE(struct ofpbuf *out)
+{
+    ofpact_put_DEPARSE(out);
+    return 0;
+}
+
+static void
+encode_DEPARSE(const struct ofpact_null *null OVS_UNUSED,
+               enum ofp_version ofp_version, struct ofpbuf *out)
+{
+    if (ofp_version >= OFP15_VERSION) {
+        put_OFPAT_DEPARSE(out);
+    }
+}
+
+static char * OVS_WARN_UNUSED_RESULT
+parse_DEPARSE(char *arg OVS_UNUSED, struct ofpbuf *ofpacts,
+              enum ofputil_protocol *usable_protocols OVS_UNUSED)
+{
+    ofpact_put_DEPARSE(ofpacts);
+    return NULL;
+}
+
+static void
+format_DEPARSE(const struct ofpact_null *a OVS_UNUSED, struct ds *s)
+{
+    ds_put_cstr(s, "deparse");
+}
+
+// @P4:
+static enum ofperr
+decode_OFPAT_RAW_ADD_HEADER(uint32_t header_id,
+		enum ofp_version ofp_version OVS_UNUSED, struct ofpbuf *out)
+{
+	struct ofpact_add_header *ah;
+
+	ah = ofpact_put_ADD_HEADER(out);
+	ah->header_id = header_id;
+
+    return 0;
+}
+
+static void
+encode_ADD_HEADER(const struct ofpact_add_header *ah,
+                  enum ofp_version ofp_version, struct ofpbuf *out)
+{
+    if (ofp_version >= OFP15_VERSION) {
+    	put_OFPAT_ADD_HEADER(out, ah->header_id);
+    }
+}
+
+static char * OVS_WARN_UNUSED_RESULT
+parse_ADD_HEADER(char *arg, struct ofpbuf *ofpacts,
+                   enum ofputil_protocol *usable_protocols OVS_UNUSED)
+{
+	OVS_PARSE_ADD_HEADER_CHECKS
+    return NULL;
+}
+
+static void
+format_ADD_HEADER(const struct ofpact_add_header *ah, struct ds *s)
+{
+	switch((enum mf_field_id)ah->header_id) {
+	OVS_FORMAT_ADD_HEADER_CASES
+
+	case MFF_N_IDS:
+	default:
+		OVS_NOT_REACHED();
+	}
+    return;
+}
+
+// @P4:
+static enum ofperr
+decode_OFPAT_RAW_REMOVE_HEADER(uint32_t header_id,
+		enum ofp_version ofp_version OVS_UNUSED, struct ofpbuf *out)
+{
+	struct ofpact_remove_header *rh;
+
+	rh = ofpact_put_REMOVE_HEADER(out);
+	rh->header_id = header_id;
+
+	return 0;
+}
+
+static void
+encode_REMOVE_HEADER(const struct ofpact_remove_header *rh,
+                     enum ofp_version ofp_version, struct ofpbuf *out)
+{
+	if (ofp_version >= OFP15_VERSION) {
+		put_OFPAT_REMOVE_HEADER(out, rh->header_id);
+	}
+}
+
+static char * OVS_WARN_UNUSED_RESULT
+parse_REMOVE_HEADER(char *arg, struct ofpbuf *ofpacts,
+                    enum ofputil_protocol *usable_protocols OVS_UNUSED)
+{
+	OVS_PARSE_REMOVE_HEADER_CHECKS
+	return NULL;
+}
+
+static void
+format_REMOVE_HEADER(const struct ofpact_remove_header *rh, struct ds *s)
+{
+	switch((enum mf_field_id)rh->header_id) {
+	OVS_FORMAT_REMOVE_HEADER_CASES
+
+	case MFF_N_IDS:
+	default:
+		OVS_NOT_REACHED();
+	}
+	return;
+}
+
+/* @P4: */
+static enum ofperr
+decode_OFPAT_RAW_MODIFY_FIELD(struct ofpbuf *ofpacts OVS_UNUSED)
+{
+    return 0;
+}
+
+static void
+encode_MODIFY_FIELD(const struct ofpact_set_field *sf,
+                    enum ofp_version ofp_version, struct ofpbuf *out)
+{
+    if (ofp_version >= OFP15_VERSION) {
+        set_field_to_set_field(sf, ofp_version, out);
+    }
+}
+
+static char * OVS_WARN_UNUSED_RESULT
+parse_MODIFY_FIELD(char *arg, struct ofpbuf *ofpacts,
+                   enum ofputil_protocol *usable_protocols)
+{
+    char *copy = xstrdup(arg);
+    char *error = set_field_parse__(copy, ofpacts, usable_protocols);
+    free(copy);
+    return error;
+}
+
+static void
+format_MODIFY_FIELD(const struct ofpact_set_field *sf OVS_UNUSED,
+                        struct ds *s OVS_UNUSED)
+{
+    return;
+}
+
+// @P4:
+// TODO: 1. handle error checks.
+//	     2. handle metadata fields.
+struct ofp_action_calc_fields {
+    ovs_be16 type;
+    ovs_be16 len;
+
+    ovs_be16 dst_field_id;
+    ovs_be16 algorithm;
+    ovs_be16 n_fields;
+
+    uint8_t zero[6];
+};
+OFP_ASSERT(sizeof(struct ofp_action_calc_fields) == 16);
+
+static enum ofperr
+decode_calc_fields_verify(const struct ofp_action_calc_fields *a,
+                          struct ofpbuf *ofpacts)
+{
+    static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
+    struct ofpact_calc_fields *cf;
+    size_t fields_size, i;
+    enum ofperr error;
+
+    cf = ofpact_put_CALC_FIELDS_VERIFY(ofpacts);
+    cf->dst_field_id = ntohs(a->dst_field_id);
+    cf->algorithm = ntohs(a->algorithm);
+    cf->n_fields = ntohs(a->n_fields);
+    fields_size = ntohs(a->len) - sizeof *a;
+
+    error = OFPERR_OFPBAC_BAD_ARGUMENT;
+    if (cf->n_fields > __MAX_CALC_FIELDS) {
+        VLOG_WARN_RL(&rl, "too many fields");
+    } else {
+        error = 0;
+    }
+
+    if (!is_all_zeros(a->zero, sizeof a->zero)) {
+        VLOG_WARN_RL(&rl, "reserved field is nonzero");
+        error = OFPERR_OFPBAC_BAD_ARGUMENT;
+    }
+
+    if (fields_size < cf->n_fields * sizeof(ovs_be16)) {
+        error = OFPERR_OFPBAC_BAD_LEN;
+    }
+
+    for (i = 0; i < cf->n_fields; i++) {
+        enum mf_field_id src_field_id = ntohs(((ovs_be16 *)(a + 1))[i]);
+        ofpbuf_put(ofpacts, &src_field_id, sizeof(enum mf_field_id));
+    }
+
+    cf = ofpacts->header;
+
+    ofpact_finish(ofpacts, &cf->ofpact);
+
+    return error;
+}
+
+static enum ofperr
+decode_OFPAT_RAW_CALC_FIELDS_VERIFY(const struct ofp_action_calc_fields *a,
+		enum ofp_version ofp_version OVS_UNUSED, struct ofpbuf *out)
+{
+    return decode_calc_fields_verify(a, out);
+}
+
+static void
+encode_CALC_FIELDS_VERIFY(const struct ofpact_calc_fields *cf,
+                          enum ofp_version ofp_version OVS_UNUSED, struct ofpbuf *out)
+{
+    if (ofp_version >= OFP15_VERSION) {
+        int fields_len = ROUND_UP(2 * cf->n_fields, OFP_ACTION_ALIGN);
+        struct ofp_action_calc_fields *a;
+        ovs_be16 *src_field_ids;
+        size_t i;
+
+        a = put_OFPAT_CALC_FIELDS_VERIFY(out);
+        a->len = htons(ntohs(a->len) + fields_len);
+        a->dst_field_id = htons(cf->dst_field_id);
+        a->algorithm = htons(cf->algorithm);
+        a->n_fields = htons(cf->n_fields);
+
+        src_field_ids = ofpbuf_put_zeros(out, fields_len);
+        for (i = 0; i < cf->n_fields; i++) {
+            src_field_ids[i] = htons(cf->src_field_ids[i]);
+        }
+    }
+}
+
+static char * OVS_WARN_UNUSED_RESULT
+calc_fields_verify_parse__(const char *s, char **save_ptr,
+                           const char *dst_field, const char *algorithm,
+                           const char *src_field_delim, struct ofpbuf *ofpacts)
+{
+    struct ofpact_calc_fields *cf;
+
+    if (!src_field_delim) {
+        return xasprintf("%s: not enough arguments to calc_fields_verify action", s);
+    }
+
+    if (strcasecmp(src_field_delim, "fields")) {
+        return xasprintf("%s: missing field delimiter, expected `fields' "
+                         "got `%s'", s, src_field_delim);
+    }
+
+    cf = ofpact_put_CALC_FIELDS_VERIFY(ofpacts);
+
+    for (;;) {
+        char *src_field;
+
+        src_field = strtok_r(NULL, ", []", save_ptr);
+        if (!src_field || cf->n_fields >= __MAX_CALC_FIELDS) {
+            break;
+        }
+
+        ofpbuf_put(ofpacts, &mf_from_name(src_field)->id, sizeof(enum mf_field_id));
+
+        cf = ofpacts->header;
+        cf->n_fields++;
+    }
+    ofpact_finish(ofpacts, &cf->ofpact);
+
+    if (!strcasecmp(algorithm, "csum16")) {
+        cf->algorithm = CF_ALGO_CSUM16;
+    } else {
+        return xasprintf("%s: unknown algorithm `%s'", s, algorithm);
+    }
+
+    if (dst_field) {
+        cf->dst_field_id = mf_from_name(dst_field)->id;
+    }
+
+    return NULL;
+}
+
+static char * OVS_WARN_UNUSED_RESULT
+calc_fields_verify_parse(const char *s, struct ofpbuf *ofpacts)
+{
+    char *dst_field, *algorithm, *src_field_delim;
+    char *tokstr, *save_ptr;
+    char *error;
+
+    save_ptr = NULL;
+    tokstr = xstrdup(s);
+    dst_field = strtok_r(tokstr, ", ", &save_ptr);
+    algorithm = strtok_r(NULL, ", ", &save_ptr);
+    src_field_delim = strtok_r(NULL, ": ", &save_ptr);
+
+    error = calc_fields_verify_parse__(s, &save_ptr, dst_field, algorithm,
+                                       src_field_delim, ofpacts);
+    free(tokstr);
+
+    return error;
+}
+
+static char * OVS_WARN_UNUSED_RESULT
+parse_CALC_FIELDS_VERIFY(const char *arg, struct ofpbuf *ofpacts,
+                         enum ofputil_protocol *usable_protocols OVS_UNUSED)
+{
+    return calc_fields_verify_parse(arg, ofpacts);
+}
+
+static void
+calc_fields_verify_format(const struct ofpact_calc_fields *cf, struct ds *s)
+{
+    const char *dst_field, *algorithm, *src_field;
+    size_t i;
+
+    dst_field = mf_from_id(cf->dst_field_id)->name;
+
+    switch (cf->algorithm) {
+    case CF_ALGO_CSUM16:
+        algorithm = "csum16";
+        break;
+    default:
+        algorithm = "<unknown>";
+    }
+
+    ds_put_format(s, "calc_fields_verify(%s,%s,", dst_field, algorithm);
+
+    ds_put_cstr(s, "fields:");
+    for (i = 0; i < cf->n_fields; i++) {
+        if (i) {
+            ds_put_cstr(s, ",");
+        }
+
+        src_field = mf_from_id(cf->src_field_ids[i])->name;
+        ds_put_cstr(s, src_field);
+    }
+
+    ds_put_cstr(s, ")");
+}
+
+static void
+format_CALC_FIELDS_VERIFY(const struct ofpact_calc_fields *a, struct ds *s)
+{
+    calc_fields_verify_format(a, s);
+}
+
+// @P4:
+// TODO: 1. handle error checks.
+//       2. handle metadata fields.
+static enum ofperr
+decode_calc_fields_update(const struct ofp_action_calc_fields *a,
+                          struct ofpbuf *ofpacts)
+{
+    static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
+    struct ofpact_calc_fields *cf;
+    size_t fields_size, i;
+    enum ofperr error;
+
+    cf = ofpact_put_CALC_FIELDS_UPDATE(ofpacts);
+    cf->dst_field_id = ntohs(a->dst_field_id);
+    cf->algorithm = ntohs(a->algorithm);
+    cf->n_fields = ntohs(a->n_fields);
+    fields_size = ntohs(a->len) - sizeof *a;
+
+    error = OFPERR_OFPBAC_BAD_ARGUMENT;
+    if (cf->n_fields > __MAX_CALC_FIELDS) {
+        VLOG_WARN_RL(&rl, "too many fields");
+    } else {
+        error = 0;
+    }
+
+    if (!is_all_zeros(a->zero, sizeof a->zero)) {
+        VLOG_WARN_RL(&rl, "reserved field is nonzero");
+        error = OFPERR_OFPBAC_BAD_ARGUMENT;
+    }
+
+    if (fields_size < cf->n_fields * sizeof(ovs_be16)) {
+        error = OFPERR_OFPBAC_BAD_LEN;
+    }
+
+    for (i = 0; i < cf->n_fields; i++) {
+        enum mf_field_id src_field_id = ntohs(((ovs_be16 *)(a + 1))[i]);
+        ofpbuf_put(ofpacts, &src_field_id, sizeof(enum mf_field_id));
+    }
+
+    cf = ofpacts->header;
+    ofpact_finish(ofpacts, &cf->ofpact);
+
+    return error;
+}
+
+static enum ofperr
+decode_OFPAT_RAW_CALC_FIELDS_UPDATE(const struct ofp_action_calc_fields *a,
+		enum ofp_version ofp_version OVS_UNUSED, struct ofpbuf *out)
+{
+    return decode_calc_fields_update(a, out);
+}
+
+static void
+encode_CALC_FIELDS_UPDATE(const struct ofpact_calc_fields *cf,
+                          enum ofp_version ofp_version OVS_UNUSED, struct ofpbuf *out)
+{
+    if (ofp_version >= OFP15_VERSION) {
+        int fields_len = ROUND_UP(2 * cf->n_fields, OFP_ACTION_ALIGN);
+        struct ofp_action_calc_fields *a;
+        ovs_be16 *src_field_ids;
+        size_t i;
+
+        a = put_OFPAT_CALC_FIELDS_UPDATE(out);
+        a->len = htons(ntohs(a->len) + fields_len);
+        a->dst_field_id = htons(cf->dst_field_id);
+        a->algorithm = htons(cf->algorithm);
+        a->n_fields = htons(cf->n_fields);
+
+        src_field_ids = ofpbuf_put_zeros(out, fields_len);
+        for (i = 0; i < cf->n_fields; i++) {
+            src_field_ids[i] = htons(cf->src_field_ids[i]);
+        }
+    }
+}
+
+static char * OVS_WARN_UNUSED_RESULT
+calc_fields_update_parse__(const char *s, char **save_ptr,
+                           const char *dst_field, const char *algorithm,
+                           const char *src_field_delim, struct ofpbuf *ofpacts)
+{
+    struct ofpact_calc_fields *cf;
+
+    if (!src_field_delim) {
+        return xasprintf("%s: not enough arguments to calc_fields_update action", s);
+    }
+
+    if (strcasecmp(src_field_delim, "fields")) {
+        return xasprintf("%s: missing field delimiter, expected `fields' "
+                         "got `%s'", s, src_field_delim);
+    }
+
+    cf = ofpact_put_CALC_FIELDS_UPDATE(ofpacts);
+
+    for (;;) {
+        char *src_field;
+
+        src_field = strtok_r(NULL, ", []", save_ptr);
+        if (!src_field || cf->n_fields >= __MAX_CALC_FIELDS) {
+            break;
+        }
+
+        ofpbuf_put(ofpacts, &mf_from_name(src_field)->id, sizeof(enum mf_field_id));
+
+        cf = ofpacts->header;
+        cf->n_fields++;
+    }
+    ofpact_finish(ofpacts, &cf->ofpact);
+
+    if (!strcasecmp(algorithm, "csum16")) {
+        cf->algorithm = CF_ALGO_CSUM16;
+    } else {
+        return xasprintf("%s: unknown algorithm `%s'", s, algorithm);
+    }
+
+    if (dst_field) {
+        cf->dst_field_id = mf_from_name(dst_field)->id;
+    }
+
+    return NULL;
+}
+
+static char * OVS_WARN_UNUSED_RESULT
+calc_fields_update_parse(const char *s, struct ofpbuf *ofpacts)
+{
+    char *dst_field, *algorithm, *src_field_delim;
+    char *tokstr, *save_ptr;
+    char *error;
+
+    save_ptr = NULL;
+    tokstr = xstrdup(s);
+    dst_field = strtok_r(tokstr, ", ", &save_ptr);
+    algorithm = strtok_r(NULL, ", ", &save_ptr);
+    src_field_delim = strtok_r(NULL, ": ", &save_ptr);
+
+    error = calc_fields_update_parse__(s, &save_ptr, dst_field, algorithm,
+                                       src_field_delim, ofpacts);
+    free(tokstr);
+
+    return error;
+}
+
+static char * OVS_WARN_UNUSED_RESULT
+parse_CALC_FIELDS_UPDATE(const char *arg, struct ofpbuf *ofpacts,
+                         enum ofputil_protocol *usable_protocols OVS_UNUSED)
+{
+    return calc_fields_update_parse(arg, ofpacts);
+}
+
+static void
+calc_fields_update_format(const struct ofpact_calc_fields *cf, struct ds *s)
+{
+    const char *dst_field, *algorithm, *src_field;
+    size_t i;
+
+    dst_field = mf_from_id(cf->dst_field_id)->name;
+
+    switch (cf->algorithm) {
+    case CF_ALGO_CSUM16:
+        algorithm = "csum16";
+        break;
+    default:
+        algorithm = "<unknown>";
+    }
+
+    ds_put_format(s, "calc_fields_update(%s,%s,", dst_field, algorithm);
+
+    ds_put_cstr(s, "fields:");
+    for (i = 0; i < cf->n_fields; i++) {
+        if (i) {
+            ds_put_cstr(s, ",");
+        }
+
+        src_field = mf_from_id(cf->src_field_ids[i])->name;
+        ds_put_cstr(s, src_field);
+    }
+
+    ds_put_cstr(s, ")");
+}
+
+static void
+format_CALC_FIELDS_UPDATE(const struct ofpact_calc_fields *a, struct ds *s)
+{
+    calc_fields_update_format(a, s);
+}
+
+// @P4:
+// TODO: 1. handle addition for masked fields.
+//       2. handle addition for metadata fields.
+struct ofp_action_add_to_field {
+    ovs_be16 type;
+    ovs_be16 len;
+
+    uint8_t pad[4];
+};
+OFP_ASSERT(sizeof(struct ofp_action_add_to_field) == 8);
+
+static enum ofperr
+decode_ofpat_add_to_field(const struct ofp_action_add_to_field *a,
+                          bool may_mask, struct ofpbuf *ofpacts)
+{
+    struct ofpact_add_to_field *atf;
+    enum ofperr error;
+    struct ofpbuf b;
+
+    atf = ofpact_put_ADD_TO_FIELD(ofpacts);
+
+    ofpbuf_use_const(&b, a, ntohs(a->len));
+    ofpbuf_pull(&b, OBJECT_OFFSETOF(a, pad));
+    error = nx_pull_entry(&b, &atf->field, &atf->value,
+                          may_mask ? &atf->mask : NULL);
+    if (error) {
+        return (error == OFPERR_OFPBMC_BAD_MASK
+                ? OFPERR_OFPBAC_BAD_SET_MASK
+                : error);
+    }
+    if (!may_mask) {
+        memset(&atf->mask, 0xff, atf->field->n_bytes);
+    }
+
+    if (!is_all_zeros(b.data, b.size)) {
+        return OFPERR_OFPBAC_BAD_SET_ARGUMENT;
+    }
+
+    /* OpenFlow says specifically that one may not set OXM_OF_IN_PORT via
+     * Set-Field. */
+    if (atf->field->id == MFF_IN_PORT_OXM) {
+        return OFPERR_OFPBAC_BAD_SET_ARGUMENT;
+    }
+
+    /* oxm_length is now validated to be compatible with mf_value. */
+    if (!atf->field->writable) {
+        VLOG_WARN_RL(&rl, "destination field %s is not writable",
+                     atf->field->name);
+        return OFPERR_OFPBAC_BAD_SET_ARGUMENT;
+    }
+
+    return 0;
+}
+
+static enum ofperr
+decode_OFPAT_RAW_ADD_TO_FIELD(const struct ofp_action_add_to_field *a,
+		enum ofp_version ofp_version OVS_UNUSED, struct ofpbuf *ofpacts)
+{
+    return decode_ofpat_add_to_field(a, true, ofpacts);
+}
+
+static void
+encode_ADD_TO_FIELD(const struct ofpact_add_to_field *atf,
+                    enum ofp_version ofp_version, struct ofpbuf *out)
+{
+    if (ofp_version >= OFP15_VERSION) {
+        struct ofp_action_add_to_field *a OVS_UNUSED;
+        size_t start_ofs = out->size;
+
+        a = put_OFPAT_ADD_TO_FIELD(out);
+        out->size = out->size - sizeof a->pad;
+        nx_put_entry(out, atf->field->id, ofp_version, &atf->value, &atf->mask);
+        pad_ofpat(out, start_ofs);
+    }
+}
+
+static char * OVS_WARN_UNUSED_RESULT
+add_to_field_parse__(char *arg, struct ofpbuf *ofpacts,
+                     enum ofputil_protocol *usable_protocols)
+{
+    struct ofpact_add_to_field *atf = ofpact_put_ADD_TO_FIELD(ofpacts);
+    char *value;
+    char *delim;
+    char *key;
+    const struct mf_field *mf;
+    char *error;
+
+    value = arg;
+    delim = strstr(arg, "->");
+    if (!delim) {
+        return xasprintf("%s: missing `->'", arg);
+    }
+    if (strlen(delim) <= strlen("->")) {
+        return xasprintf("%s: missing field name following `->'", arg);
+    }
+
+    key = delim + strlen("->");
+    mf = mf_from_name(key);
+    if (!mf) {
+        return xasprintf("%s is not a valid OXM field name", key);
+    }
+    if (!mf->writable) {
+        return xasprintf("%s is read-only", key);
+    }
+    atf->field = mf;
+    delim[0] = '\0';
+    error = mf_parse(mf, value, &atf->value, &atf->mask);
+    if (error) {
+        return error;
+    }
+
+    if (!mf_is_value_valid(mf, &atf->value)) {
+        return xasprintf("%s is not a valid value for field %s", value, key);
+    }
+
+    *usable_protocols &= mf->usable_protocols_exact;
+    return NULL;
+}
+
+static char * OVS_WARN_UNUSED_RESULT
+parse_ADD_TO_FIELD(char *arg, struct ofpbuf *ofpacts,
+                   enum ofputil_protocol *usable_protocols)
+{
+    char *copy = xstrdup(arg);
+    char *error = add_to_field_parse__(copy, ofpacts, usable_protocols);
+    free(copy);
+    return error;
+}
+
+static void
+format_ADD_TO_FIELD(const struct ofpact_add_to_field *atf, struct ds *s)
+{
+    ds_put_cstr(s, "add_to_field:");
+    mf_format(atf->field, &atf->value, &atf->mask, s);
+    ds_put_format(s, "->%s", atf->field->name);
+}
+
+// @P4:
+// TODO: 1. handle subtraction for masked fields.
+//       2. handle subtraction for metadata fields.
+struct ofp_action_sub_from_field {
+    ovs_be16 type;
+    ovs_be16 len;
+
+    uint8_t pad[4];
+};
+OFP_ASSERT(sizeof(struct ofp_action_sub_from_field) == 8);
+
+static enum ofperr
+decode_ofpat_sub_from_field(const struct ofp_action_sub_from_field *a,
+                            bool may_mask, struct ofpbuf *ofpacts)
+{
+    struct ofpact_sub_from_field *sff;
+    enum ofperr error;
+    struct ofpbuf b;
+
+    sff = ofpact_put_SUB_FROM_FIELD(ofpacts);
+
+    ofpbuf_use_const(&b, a, ntohs(a->len));
+    ofpbuf_pull(&b, OBJECT_OFFSETOF(a, pad));
+    error = nx_pull_entry(&b, &sff->field, &sff->value,
+                          may_mask ? &sff->mask : NULL);
+    if (error) {
+        return (error == OFPERR_OFPBMC_BAD_MASK
+                ? OFPERR_OFPBAC_BAD_SET_MASK
+                : error);
+    }
+    if (!may_mask) {
+        memset(&sff->mask, 0xff, sff->field->n_bytes);
+    }
+
+    if (!is_all_zeros(b.data, b.size)) {
+        return OFPERR_OFPBAC_BAD_SET_ARGUMENT;
+    }
+
+    /* OpenFlow says specifically that one may not set OXM_OF_IN_PORT via
+     * Set-Field. */
+    if (sff->field->id == MFF_IN_PORT_OXM) {
+        return OFPERR_OFPBAC_BAD_SET_ARGUMENT;
+    }
+
+    /* oxm_length is now validated to be compatible with mf_value. */
+    if (!sff->field->writable) {
+        VLOG_WARN_RL(&rl, "destination field %s is not writable",
+                     sff->field->name);
+        return OFPERR_OFPBAC_BAD_SET_ARGUMENT;
+    }
+
+    return 0;
+}
+
+static enum ofperr
+decode_OFPAT_RAW_SUB_FROM_FIELD(const struct ofp_action_sub_from_field *a,
+		enum ofp_version ofp_version OVS_UNUSED, struct ofpbuf *ofpacts)
+{
+    return decode_ofpat_sub_from_field(a, true, ofpacts);
+}
+
+static void
+encode_SUB_FROM_FIELD(const struct ofpact_sub_from_field *sff,
+                      enum ofp_version ofp_version, struct ofpbuf *out)
+{
+    if (ofp_version >= OFP15_VERSION) {
+        struct ofp_action_sub_from_field *a OVS_UNUSED;
+        size_t start_ofs = out->size;
+
+        a = put_OFPAT_SUB_FROM_FIELD(out);
+        out->size = out->size - sizeof a->pad;
+        nx_put_entry(out, sff->field->id, ofp_version, &sff->value, &sff->mask);
+        pad_ofpat(out, start_ofs);
+    }
+}
+
+static char * OVS_WARN_UNUSED_RESULT
+sub_from_field_parse__(char *arg, struct ofpbuf *ofpacts,
+                       enum ofputil_protocol *usable_protocols)
+{
+    struct ofpact_sub_from_field *sff = ofpact_put_SUB_FROM_FIELD(ofpacts);
+    char *value;
+    char *delim;
+    char *key;
+    const struct mf_field *mf;
+    char *error;
+
+    value = arg;
+    delim = strstr(arg, "->");
+    if (!delim) {
+        return xasprintf("%s: missing `->'", arg);
+    }
+    if (strlen(delim) <= strlen("->")) {
+        return xasprintf("%s: missing field name following `->'", arg);
+    }
+
+    key = delim + strlen("->");
+    mf = mf_from_name(key);
+    if (!mf) {
+        return xasprintf("%s is not a valid OXM field name", key);
+    }
+    if (!mf->writable) {
+        return xasprintf("%s is read-only", key);
+    }
+    sff->field = mf;
+    delim[0] = '\0';
+    error = mf_parse(mf, value, &sff->value, &sff->mask);
+    if (error) {
+        return error;
+    }
+
+    if (!mf_is_value_valid(mf, &sff->value)) {
+        return xasprintf("%s is not a valid value for field %s", value, key);
+    }
+
+    *usable_protocols &= mf->usable_protocols_exact;
+    return NULL;
+}
+
+static char * OVS_WARN_UNUSED_RESULT
+parse_SUB_FROM_FIELD(char *arg, struct ofpbuf *ofpacts,
+                     enum ofputil_protocol *usable_protocols)
+{
+    char *copy = xstrdup(arg);
+    char *error = sub_from_field_parse__(copy, ofpacts, usable_protocols);
+    free(copy);
+    return error;
+}
+
+static void
+format_SUB_FROM_FIELD(const struct ofpact_sub_from_field *sff, struct ds *s)
+{
+    ds_put_cstr(s, "sub_from_field:");
+    mf_format(sff->field, &sff->value, &sff->mask, s);
+    ds_put_format(s, "->%s", sff->field->name);
 }
 
 /* Action structure for NXAST_OUTPUT_REG.
@@ -4863,6 +5744,21 @@ ofpact_is_set_or_move_action(const struct ofpact *a)
     case OFPACT_WRITE_METADATA:
     case OFPACT_DEBUG_RECIRC:
         return false;
+
+    // @P4:
+    OVS_IS_SET_OR_MOVE_ACTION_CASES
+
+	// @P4:
+	case OFPACT_CALC_FIELDS_UPDATE:
+	case OFPACT_CALC_FIELDS_VERIFY:
+	case OFPACT_SUB_FROM_FIELD:
+	case OFPACT_ADD_TO_FIELD:
+	case OFPACT_ADD_HEADER:
+	case OFPACT_REMOVE_HEADER:
+	case OFPACT_MODIFY_FIELD:
+	case OFPACT_DEPARSE:
+		return false;
+
     default:
         OVS_NOT_REACHED();
     }
@@ -4932,6 +5828,21 @@ ofpact_is_allowed_in_actions_set(const struct ofpact *a)
     case OFPACT_WRITE_ACTIONS:
     case OFPACT_WRITE_METADATA:
         return false;
+
+    // @P4:
+    OVS_IS_ALLOWED_IN_ACTIONS_SET_CASES
+
+	// @P4:
+	case OFPACT_CALC_FIELDS_UPDATE:
+	case OFPACT_CALC_FIELDS_VERIFY:
+	case OFPACT_SUB_FROM_FIELD:
+	case OFPACT_ADD_TO_FIELD:
+	case OFPACT_ADD_HEADER:
+	case OFPACT_REMOVE_HEADER:
+	case OFPACT_MODIFY_FIELD:
+	case OFPACT_DEPARSE:
+		return false;
+
     default:
         OVS_NOT_REACHED();
     }
@@ -5094,6 +6005,21 @@ ovs_instruction_type_from_ofpact_type(enum ofpact_type type)
         return OVSINST_OFPIT11_WRITE_METADATA;
     case OFPACT_GOTO_TABLE:
         return OVSINST_OFPIT11_GOTO_TABLE;
+
+    // @P4:
+    OVS_INSTRUCTION_TYPE_FROM_OFPACT_TYPE_CASES
+
+	// @P4:
+	case OFPACT_CALC_FIELDS_UPDATE:
+	case OFPACT_CALC_FIELDS_VERIFY:
+	case OFPACT_SUB_FROM_FIELD:
+	case OFPACT_ADD_TO_FIELD:
+	case OFPACT_ADD_HEADER:
+	case OFPACT_REMOVE_HEADER:
+	case OFPACT_MODIFY_FIELD:
+	case OFPACT_DEPARSE:
+		return OVSINST_OFPIT11_APPLY_ACTIONS;
+
     case OFPACT_OUTPUT:
     case OFPACT_GROUP:
     case OFPACT_CONTROLLER:
@@ -5736,6 +6662,20 @@ ofpact_check__(enum ofputil_protocol *usable_protocols, struct ofpact *a,
     case OFPACT_DEBUG_RECIRC:
         return 0;
 
+    // @P4:
+    OVS_CHECK___CASES
+
+	// @P4:
+	case OFPACT_CALC_FIELDS_UPDATE:
+	case OFPACT_CALC_FIELDS_VERIFY:
+	case OFPACT_SUB_FROM_FIELD:
+	case OFPACT_ADD_TO_FIELD:
+	case OFPACT_ADD_HEADER:
+	case OFPACT_REMOVE_HEADER:
+	case OFPACT_MODIFY_FIELD:
+	case OFPACT_DEPARSE:
+		return 0;
+
     default:
         OVS_NOT_REACHED();
     }
@@ -6116,6 +7056,20 @@ ofpact_outputs_to_port(const struct ofpact *ofpact, ofp_port_t port)
         return ofpact_get_ENQUEUE(ofpact)->port == port;
     case OFPACT_CONTROLLER:
         return port == OFPP_CONTROLLER;
+
+    // @P4:
+    OVS_OUTPUTS_TO_PORT_CASES
+
+	// @P4:
+	case OFPACT_CALC_FIELDS_UPDATE:
+	case OFPACT_CALC_FIELDS_VERIFY:
+	case OFPACT_SUB_FROM_FIELD:
+	case OFPACT_ADD_TO_FIELD:
+	case OFPACT_ADD_HEADER:
+	case OFPACT_REMOVE_HEADER:
+	case OFPACT_MODIFY_FIELD:
+	case OFPACT_DEPARSE:
+		return false;
 
     case OFPACT_OUTPUT_REG:
     case OFPACT_BUNDLE:

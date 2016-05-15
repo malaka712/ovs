@@ -41,6 +41,10 @@
 #include "uuid.h"
 #include "openvswitch/vlog.h"
 
+// @P4:
+#include "p4/src/match/odp-util.h"
+#include "p4/src/action/odp-util.h"
+
 VLOG_DEFINE_THIS_MODULE(odp_util);
 
 /* The interface between userspace and kernel uses an "OVS_*" prefix.
@@ -114,6 +118,18 @@ odp_action_len(uint16_t type)
     case OVS_ACTION_ATTR_SET_MASKED: return ATTR_LEN_VARIABLE;
     case OVS_ACTION_ATTR_SAMPLE: return ATTR_LEN_VARIABLE;
 
+    // @P4:
+    OVS_ACTION_LEN_CASES
+
+	// @P4:
+	case OVS_ACTION_ATTR_SUB_FROM_FIELD: return ATTR_LEN_VARIABLE;
+	case OVS_ACTION_ATTR_ADD_TO_FIELD: return ATTR_LEN_VARIABLE;
+	case OVS_ACTION_ATTR_CALC_FIELDS_UPDATE: return ATTR_LEN_VARIABLE;
+	case OVS_ACTION_ATTR_CALC_FIELDS_VERIFY: return ATTR_LEN_VARIABLE;
+	case OVS_ACTION_ATTR_ADD_HEADER: return ATTR_LEN_VARIABLE;
+	case OVS_ACTION_ATTR_REMOVE_HEADER: return ATTR_LEN_VARIABLE;
+	case OVS_ACTION_ATTR_DEPARSE: return 0;
+
     case OVS_ACTION_ATTR_UNSPEC:
     case __OVS_ACTION_ATTR_MAX:
         return ATTR_LEN_INVALID;
@@ -152,6 +168,9 @@ ovs_key_attr_to_string(enum ovs_key_attr attr, char *namebuf, size_t bufsize)
     case OVS_KEY_ATTR_MPLS: return "mpls";
     case OVS_KEY_ATTR_DP_HASH: return "dp_hash";
     case OVS_KEY_ATTR_RECIRC_ID: return "recirc_id";
+
+    // @P4:
+    OVS_KEY_ATTRS_TO_STRING_CASES
 
     case __OVS_KEY_ATTR_MAX:
     default:
@@ -622,6 +641,178 @@ format_odp_action(struct ds *ds, const struct nlattr *a)
     case OVS_ACTION_ATTR_SAMPLE:
         format_odp_sample_action(ds, a);
         break;
+    // @P4:
+    OVS_FORMAT_ODP_ACTION_CASES
+
+	// @P4:
+	case OVS_ACTION_ATTR_CALC_FIELDS_VERIFY: {
+																  a = nl_attr_get(a);
+		enum ovs_calc_field_attr dst_field_key = nl_attr_type(a); a = nl_attr_next(a);
+		enum ovs_cf_algorithm algorithm = nl_attr_get_u16(a);     a = nl_attr_next(a);
+																  a = nl_attr_next(a);
+
+		ds_put_cstr(ds, "calc_fields_verify(");
+
+		switch (dst_field_key) {
+		OVS_FORMAT_ODP_ACTION_CALC_FIELDS_CASES
+
+		case OVS_CALC_FIELD_ATTR_UNSPEC:
+		case __OVS_CALC_FIELD_ATTR_MAX:
+		default:
+			OVS_NOT_REACHED();
+		}
+
+		ds_put_char(ds, ',');
+
+		switch (algorithm) {
+		case OVS_CF_ALGO_CSUM16:
+			ds_put_cstr(ds, "csum16");
+			break;
+
+		default:
+			ds_put_cstr(ds, "<unknown>");
+			break;
+		}
+
+		ds_put_cstr(ds, ",fields:");
+
+		const struct nlattr *a_;
+		size_t left;
+		NL_NESTED_FOR_EACH_UNSAFE(a_, left, a){
+			switch ((enum ovs_calc_field_attr) nl_attr_type(a_)) {
+			OVS_FORMAT_ODP_ACTION_CALC_FIELDS_CASES
+
+			case OVS_CALC_FIELD_ATTR_UNSPEC:
+			case __OVS_CALC_FIELD_ATTR_MAX:
+			default:
+				OVS_NOT_REACHED();
+			}
+
+			ds_put_char(ds, ',');
+		}
+
+		ds_truncate(ds, ds->length - 1);
+		ds_put_char(ds, ')');
+		break;
+	}
+
+	// @P4:
+	case OVS_ACTION_ATTR_CALC_FIELDS_UPDATE: {
+																  a = nl_attr_get(a);
+		enum ovs_calc_field_attr dst_field_key = nl_attr_type(a); a = nl_attr_next(a);
+		enum ovs_cf_algorithm algorithm = nl_attr_get_u16(a);     a = nl_attr_next(a);
+																  a = nl_attr_next(a);
+
+		ds_put_cstr(ds, "calc_fields_update(");
+
+		switch (dst_field_key) {
+		OVS_FORMAT_ODP_ACTION_CALC_FIELDS_CASES
+
+		case OVS_CALC_FIELD_ATTR_UNSPEC:
+		case __OVS_CALC_FIELD_ATTR_MAX:
+		default:
+			OVS_NOT_REACHED();
+		}
+
+		ds_put_char(ds, ',');
+
+		switch (algorithm) {
+		case OVS_CF_ALGO_CSUM16:
+			ds_put_cstr(ds, "csum16");
+			break;
+
+		default:
+			ds_put_cstr(ds, "<unknown>");
+			break;
+		}
+
+		ds_put_cstr(ds, ",fields:");
+
+		const struct nlattr *a_;
+		size_t left;
+		NL_NESTED_FOR_EACH_UNSAFE(a_, left, a){
+			switch ((enum ovs_calc_field_attr) nl_attr_type(a_)) {
+			OVS_FORMAT_ODP_ACTION_CALC_FIELDS_CASES
+
+			case OVS_CALC_FIELD_ATTR_UNSPEC:
+			case __OVS_CALC_FIELD_ATTR_MAX:
+			default:
+				OVS_NOT_REACHED();
+			}
+
+			ds_put_char(ds, ',');
+		}
+
+		ds_truncate(ds, ds->length - 1);
+		ds_put_char(ds, ')');
+		break;
+	}
+
+	// @P4:
+	case OVS_ACTION_ATTR_SUB_FROM_FIELD:
+		a = nl_attr_get(a);
+		size = nl_attr_get_size(a);
+		ds_put_cstr(ds, "sub_from_field(");
+
+		format_odp_key_attr(a, NULL, NULL, ds, false);
+
+		ds_put_cstr(ds, ")");
+		break;
+
+	// @P4:
+	case OVS_ACTION_ATTR_ADD_TO_FIELD:
+		a = nl_attr_get(a);
+		size = nl_attr_get_size(a);
+		ds_put_cstr(ds, "add_to_field(");
+
+		format_odp_key_attr(a, NULL, NULL, ds, false);
+
+		ds_put_cstr(ds, ")");
+		break;
+
+	// @P4:
+	case OVS_ACTION_ATTR_ADD_HEADER: {
+		a = nl_attr_get(a);
+		enum ovs_key_attr key = nl_attr_type(a);
+		ds_put_cstr(ds, "add_header(");
+
+		switch (key) {
+		OVS_FORMAT_ODP_ACTION_ADD_REMOVE_HEADER_CASES /* @Shahbaz: */
+
+		case OVS_KEY_ATTR_UNSPEC:
+		case __OVS_KEY_ATTR_MAX:
+		default:
+			OVS_NOT_REACHED();
+		}
+
+		ds_put_cstr(ds, ")");
+		break;
+	}
+
+	// @P4:
+	case OVS_ACTION_ATTR_REMOVE_HEADER: {
+		a = nl_attr_get(a);
+		enum ovs_key_attr key = nl_attr_type(a);
+		ds_put_cstr(ds, "remove_header(");
+
+		switch (key) {
+		OVS_FORMAT_ODP_ACTION_ADD_REMOVE_HEADER_CASES /* @Shahbaz: */
+
+		case OVS_KEY_ATTR_UNSPEC:
+		case __OVS_KEY_ATTR_MAX:
+		default:
+			OVS_NOT_REACHED();
+		}
+
+		ds_put_cstr(ds, ")");
+		break;
+	}
+
+	// @P4:
+	case OVS_ACTION_ATTR_DEPARSE:
+		ds_put_cstr(ds, "deparse");
+		break;
+
     case OVS_ACTION_ATTR_UNSPEC:
     case __OVS_ACTION_ATTR_MAX:
     default:
@@ -1067,6 +1258,9 @@ parse_odp_action(const char *s, const struct simap *port_names,
         return 8;
     }
 
+    // @P4:
+    // TODO: add logic for parsing actions here.
+
     {
         double percentage;
         int n = -1;
@@ -1211,6 +1405,9 @@ static const struct attr_len_tbl ovs_flow_key_attr_lens[OVS_KEY_ATTR_MAX + 1] = 
     [OVS_KEY_ATTR_ICMPV6]    = { .len = sizeof(struct ovs_key_icmpv6) },
     [OVS_KEY_ATTR_ARP]       = { .len = sizeof(struct ovs_key_arp) },
     [OVS_KEY_ATTR_ND]        = { .len = sizeof(struct ovs_key_nd) },
+
+	// @P4:
+	OVS_FLOW_KEY_ATTR_LENS
 };
 
 /* Returns the correct length of the payload for a flow key attribute of the
@@ -1536,6 +1733,69 @@ format_eth(struct ds *ds, const char *name, const struct eth_addr key,
 
 static void
 format_be64(struct ds *ds, const char *name, ovs_be64 key,
+            const ovs_be64 *mask, bool verbose)
+{
+    bool mask_empty = mask && !*mask;
+
+    if (verbose || !mask_empty) {
+        bool mask_full = !mask || *mask == OVS_BE64_MAX;
+
+        ds_put_format(ds, "%s=0x%"PRIx64, name, ntohll(key));
+        if (!mask_full) { /* Partially masked. */
+            ds_put_format(ds, "/%#"PRIx64, ntohll(*mask));
+        }
+        ds_put_char(ds, ',');
+    }
+}
+
+// @P4:
+static void
+format_bex(struct ds *ds, const char *name, const uint8_t *key,
+            const uint8_t (*mask)[], size_t n_bytes, bool verbose)
+{
+    bool mask_empty = mask && is_all_zeros(*mask, n_bytes);
+
+    if (verbose || !mask_empty) {
+        int i;
+        bool mask_is_exact = mask && is_all_ones(*mask, n_bytes);
+        bool mask_full = !mask || mask_is_exact;
+
+        ds_put_format(ds, "%s=0x""%02"PRIx8, name, key[0]);
+        for (i = 1; i < n_bytes; i++) {
+            ds_put_format(ds, "%02"PRIx8, key[i]);
+        }
+
+        if (!mask_full) {
+            ds_put_format(ds, "/0x""%02"PRIx8, (*mask)[0]);
+            for (i = 1; i < n_bytes; i++) {
+                ds_put_format(ds, "%02"PRIx8, (*mask)[i]);
+            }
+        }
+        ds_put_char(ds, ',');
+    }
+}
+
+// @P4:
+static void
+format_be32x(struct ds *ds, const char *name, ovs_be32 key,
+            const ovs_be32 *mask, bool verbose)
+{
+    bool mask_empty = mask && !*mask;
+
+    if (verbose || !mask_empty) {
+        bool mask_full = !mask || *mask == OVS_BE16_MAX;
+
+        ds_put_format(ds, "%s=%"PRIx32, name, ntohs(key));
+        if (!mask_full) { /* Partially masked. */
+            ds_put_format(ds, "/%#"PRIx32, ntohs(*mask));
+        }
+        ds_put_char(ds, ',');
+    }
+}
+
+// @P4:
+static void
+format_be64x(struct ds *ds, const char *name, ovs_be64 key,
             const ovs_be64 *mask, bool verbose)
 {
     bool mask_empty = mask && !*mask;
@@ -2222,6 +2482,10 @@ format_odp_key_attr(const struct nlattr *a, const struct nlattr *ma,
         ds_chomp(ds, ',');
         break;
     }
+
+    // @P4:
+    OVS_FORMAT_ODP_KEY_ATTR_CASES
+
     case OVS_KEY_ATTR_UNSPEC:
     case __OVS_KEY_ATTR_MAX:
     default:
@@ -3143,6 +3407,9 @@ parse_odp_key_mask_attr(const char *s, const struct simap *port_names,
 
     SCAN_SINGLE_PORT("in_port(", uint32_t, OVS_KEY_ATTR_IN_PORT);
 
+    // @P4:
+    // TODO: add logic for scanning here.
+
     SCAN_BEGIN("eth(", struct ovs_key_ethernet) {
         SCAN_FIELD("src=", eth, eth_src);
         SCAN_FIELD("dst=", eth, eth_dst);
@@ -3333,6 +3600,9 @@ static void put_arp_key(const struct ovs_key_arp *, struct flow *);
 static void get_nd_key(const struct flow *, struct ovs_key_nd *);
 static void put_nd_key(const struct ovs_key_nd *, struct flow *);
 
+// @P4:
+OVS_SET_FUNC_DECLS
+
 /* These share the same layout. */
 union ovs_key_tp {
     struct ovs_key_tcp tcp;
@@ -3371,6 +3641,9 @@ odp_flow_key_from_flow__(const struct odp_flow_key_parms *parms,
     if (export_mask || parms->odp_in_port != ODPP_NONE) {
         nl_msg_put_odp_port(buf, OVS_KEY_ATTR_IN_PORT, parms->odp_in_port);
     }
+
+    // @P4:
+    OVS_FLOW_KEY_FROM_FLOW
 
     eth_key = nl_msg_put_unspec_uninit(buf, OVS_KEY_ATTR_ETHERNET,
                                        sizeof *eth_key);
@@ -4166,6 +4439,9 @@ odp_flow_key_to_flow__(const struct nlattr *key, size_t key_len,
         flow->in_port.odp_port = ODPP_NONE;
     }
 
+    // @P4:
+    OVS_FLOW_KEY_TO_FLOW
+
     /* Ethernet header. */
     if (present_attrs & (UINT64_C(1) << OVS_KEY_ATTR_ETHERNET)) {
         const struct ovs_key_ethernet *eth_key;
@@ -4860,6 +5136,10 @@ commit_set_pkt_mark_action(const struct flow *flow, struct flow *base_flow,
     }
 }
 
+// @P4:
+OVS_SET_FUNC_DEFS
+OVS_COMMIT_ACTION_FUNCS
+
 /* If any of the flow key data that ODP actions can modify are different in
  * 'base' and 'flow', appends ODP actions to 'odp_actions' that change the flow
  * key from 'base' into 'flow', and then changes 'base' the same way.  Does not
@@ -4884,5 +5164,8 @@ commit_odp_actions(const struct flow *flow, struct flow *base,
     commit_set_priority_action(flow, base, odp_actions, wc, use_masked);
     commit_set_pkt_mark_action(flow, base, odp_actions, wc, use_masked);
 
-    return slow;
+    // @P4:
+    OVS_COMMIT_ODP_ACTIONS_FUNCS
+
+    return slow1 ? slow1 : slow2;
 }

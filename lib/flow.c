@@ -39,6 +39,9 @@
 #include "random.h"
 #include "unaligned.h"
 
+// @P4:
+#include "p4/src/match/flow.h"
+
 COVERAGE_DEFINE(flow_extract);
 COVERAGE_DEFINE(miniflow_malloc);
 
@@ -227,6 +230,15 @@ BUILD_MESSAGE("FLOW_WC_SEQ changed: miniflow_extract() will have runtime "
     MINIFLOW_ASSERT((OFS) % 8 == 0);                            \
     miniflow_set_maps(MF, (OFS) / 8, (N_WORDS));                \
     memcpy(MF.data, (VALUEP), (N_WORDS) * sizeof *MF.data);     \
+    MF.data += (N_WORDS);                                       \
+}
+
+/* @P4: Data at 'valuep' may be unaligned. */
+#define miniflow_push_bytes__word_aligned_(MF, OFS, VALUEP, N_BYTES, N_WORDS) \
+{                                                               \
+    MINIFLOW_ASSERT((OFS) % 8 == 0);                            \
+    miniflow_set_maps(MF, (OFS) / 8, (N_WORDS));                \
+    memcpy(MF.data, (VALUEP), N_BYTES/*(N_WORDS) * sizeof *MF.data*/); \
     MF.data += (N_WORDS);                                       \
 }
 
@@ -433,6 +445,9 @@ flow_extract(struct dp_packet *packet, struct flow *flow)
     miniflow_expand(&m.mf, flow);
 }
 
+// @P4:
+// TODO: complete this part, right now both legacy and new parser is being executed in miniflow_extract.
+
 /* Caller is responsible for initializing 'dst' with enough storage for
  * FLOW_U64S * 8 bytes. */
 void
@@ -488,7 +503,7 @@ miniflow_extract(struct dp_packet *packet, struct miniflow *dst)
 
     /* Must have full Ethernet header to proceed. */
     if (OVS_UNLIKELY(size < sizeof(struct eth_header))) {
-        goto out;
+        goto out_;
     } else {
         ovs_be16 vlan_tci;
 
@@ -522,22 +537,22 @@ miniflow_extract(struct dp_packet *packet, struct miniflow *dst)
         uint16_t tot_len;
 
         if (OVS_UNLIKELY(size < IP_HEADER_LEN)) {
-            goto out;
+            goto out_;
         }
         ip_len = IP_IHL(nh->ip_ihl_ver) * 4;
 
         if (OVS_UNLIKELY(ip_len < IP_HEADER_LEN)) {
-            goto out;
+            goto out_;
         }
         if (OVS_UNLIKELY(size < ip_len)) {
-            goto out;
+            goto out_;
         }
         tot_len = ntohs(nh->ip_tot_len);
         if (OVS_UNLIKELY(tot_len > size)) {
-            goto out;
+            goto out_;
         }
         if (OVS_UNLIKELY(size - tot_len > UINT8_MAX)) {
-            goto out;
+            goto out_;
         }
         dp_packet_set_l2_pad_size(packet, size - tot_len);
         size = tot_len;   /* Never pull padding. */
@@ -563,17 +578,17 @@ miniflow_extract(struct dp_packet *packet, struct miniflow *dst)
         uint16_t plen;
 
         if (OVS_UNLIKELY(size < sizeof *nh)) {
-            goto out;
+            goto out_;
         }
         nh = data_pull(&data, &size, sizeof *nh);
 
         plen = ntohs(nh->ip6_plen);
         if (OVS_UNLIKELY(plen > size)) {
-            goto out;
+            goto out_;
         }
         /* Jumbo Payload option not supported yet. */
         if (OVS_UNLIKELY(size - plen > UINT8_MAX)) {
-            goto out;
+            goto out_;
         }
         dp_packet_set_l2_pad_size(packet, size - plen);
         size = plen;   /* Never pull padding. */
@@ -611,7 +626,7 @@ miniflow_extract(struct dp_packet *packet, struct miniflow *dst)
              * bytes. All extension headers are required to be at least 8
              * bytes. */
             if (OVS_UNLIKELY(size < 8)) {
-                goto out;
+                goto out_;
             }
 
             if ((nw_proto == IPPROTO_HOPOPTS)
@@ -624,7 +639,7 @@ miniflow_extract(struct dp_packet *packet, struct miniflow *dst)
                 nw_proto = ext_hdr->ip6e_nxt;
                 if (OVS_UNLIKELY(!data_try_pull(&data, &size,
                                                 (ext_hdr->ip6e_len + 1) * 8))) {
-                    goto out;
+                    goto out_;
                 }
             } else if (nw_proto == IPPROTO_AH) {
                 /* A standard AH definition isn't available, but the fields
@@ -635,14 +650,14 @@ miniflow_extract(struct dp_packet *packet, struct miniflow *dst)
                 nw_proto = ext_hdr->ip6e_nxt;
                 if (OVS_UNLIKELY(!data_try_pull(&data, &size,
                                                 (ext_hdr->ip6e_len + 2) * 4))) {
-                    goto out;
+                    goto out_;
                 }
             } else if (nw_proto == IPPROTO_FRAGMENT) {
                 const struct ovs_16aligned_ip6_frag *frag_hdr = data;
 
                 nw_proto = frag_hdr->ip6f_nxt;
                 if (!data_try_pull(&data, &size, sizeof *frag_hdr)) {
-                    goto out;
+                    goto out_;
                 }
 
                 /* We only process the first fragment. */
@@ -687,7 +702,7 @@ miniflow_extract(struct dp_packet *packet, struct miniflow *dst)
                 miniflow_pad_to_64(mf, tcp_flags);
             }
         }
-        goto out;
+        goto out_;
     }
 
     packet->l4_ofs = (char *)data - l2;
@@ -757,7 +772,16 @@ miniflow_extract(struct dp_packet *packet, struct miniflow *dst)
                 miniflow_pad_to_64(mf, igmp_group_ip4);
             }
         }
-    }
+	}
+
+ // @P4:
+ out_:
+	/* Initialize packet's layer pointer and offsets. */
+	l2 = data;
+	dp_packet_reset_offsets(packet);
+
+	OVS_MINIFLOW_EXTRACT_METADATA_DEFS /* TODO: see if these can be moved outside the extract function.*/
+	OVS_MINIFLOW_EXTRACT
  out:
     dst->map = mf.map;
 }
@@ -1185,6 +1209,9 @@ void flow_wildcards_init_for_packet(struct flow_wildcards *wc,
     WC_MASK_FIELD(wc, dp_hash);
     WC_MASK_FIELD(wc, in_port);
 
+    // @P4:
+    OVS_FLOW_WC_MASK
+
     /* actset_output wildcarded. */
 
     WC_MASK_FIELD(wc, dl_dst);
@@ -1284,6 +1311,9 @@ flow_wc_map(const struct flow *flow, struct flowmap *map)
     FLOWMAP_SET(map, dl_src);
     FLOWMAP_SET(map, dl_type);
     FLOWMAP_SET(map, vlan_tci);
+
+    // @P4:
+    OVS_FLOW_WC_MAP
 
     /* Ethertype-dependent fields. */
     if (OVS_LIKELY(flow->dl_type == htons(ETH_TYPE_IP))) {

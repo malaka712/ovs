@@ -43,6 +43,10 @@
 #include <linux/types.h>
 #include <linux/if_ether.h>
 
+// @P4:
+#include "p4/src/match/openvswitch.h"
+#include "p4/src/action/openvswitch.h"
+
 /**
  * struct ovs_header - header for OVS Generic Netlink messages.
  * @dp_ifindex: ifindex of local port for datapath (0 to make a request not
@@ -348,6 +352,10 @@ enum ovs_key_attr {
 	/* Only used within kernel data path. */
 	OVS_KEY_ATTR_TUNNEL_INFO,  /* struct ovs_tunnel_info */
 #endif
+
+	// @P4:
+	OVS_KEY_ATTRS
+
 	__OVS_KEY_ATTR_MAX
 };
 
@@ -455,6 +463,9 @@ struct ovs_key_nd {
 	__u8	nd_sll[ETH_ALEN];
 	__u8	nd_tll[ETH_ALEN];
 };
+
+// @P4:
+OVS_KEY_STRUCTS
 
 /**
  * enum ovs_flow_attr - attributes for %OVS_FLOW_* commands.
@@ -619,6 +630,9 @@ struct ovs_action_hash {
 	uint32_t  hash_basis;
 };
 
+// @P4:
+OVS_ACTION_STRUCTS
+
 #ifndef __KERNEL__
 #define TNL_PUSH_HEADER_SIZE 512
 
@@ -706,6 +720,16 @@ enum ovs_action_attr {
 #ifndef __KERNEL__
 	OVS_ACTION_ATTR_TUNNEL_PUSH,   /* struct ovs_action_push_tnl*/
 	OVS_ACTION_ATTR_TUNNEL_POP,    /* u32 port number. */
+
+	// @P4:
+	OVS_ACTION_ATTRS
+	OVS_ACTION_ATTR_CALC_FIELDS_UPDATE,
+	OVS_ACTION_ATTR_CALC_FIELDS_VERIFY,
+	OVS_ACTION_ATTR_SUB_FROM_FIELD,
+	OVS_ACTION_ATTR_ADD_TO_FIELD,
+	OVS_ACTION_ATTR_ADD_HEADER,
+	OVS_ACTION_ATTR_REMOVE_HEADER,
+	OVS_ACTION_ATTR_DEPARSE,
 #endif
 	__OVS_ACTION_ATTR_MAX,	      /* Nothing past this will be accepted
 				       * from userspace. */
@@ -718,5 +742,21 @@ enum ovs_action_attr {
 };
 
 #define OVS_ACTION_ATTR_MAX (__OVS_ACTION_ATTR_MAX - 1)
+
+/* @P4: */
+enum ovs_cf_algorithm {
+    OVS_CF_ALGO_CSUM16 = 0,
+};
+
+
+/* @P4: */
+enum ovs_calc_field_attr {
+    OVS_CALC_FIELD_ATTR_UNSPEC,
+
+	OVS_CALC_FIELD_ATTRS
+
+    __OVS_CALC_FIELD_ATTR_MAX,	      /* Nothing past this will be accepted
+				       * from userspace. */
+};
 
 #endif /* _LINUX_OPENVSWITCH_H */

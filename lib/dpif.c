@@ -51,6 +51,9 @@
 #include "valgrind.h"
 #include "openvswitch/vlog.h"
 
+// @P4:
+#include "p4/src/action/dpif.h"
+
 VLOG_DEFINE_THIS_MODULE(dpif);
 
 COVERAGE_DEFINE(dpif_destroy);
@@ -1133,6 +1136,19 @@ dpif_execute_helper_cb(void *aux_, struct dp_packet **packets, int cnt,
         }
         break;
     }
+
+    // @P4:
+    OVS_EXECUTE_HELPER_CB_CASES
+
+	/* @P4: */
+	case OVS_ACTION_ATTR_SUB_FROM_FIELD:
+	case OVS_ACTION_ATTR_ADD_TO_FIELD:
+	case OVS_ACTION_ATTR_CALC_FIELDS_UPDATE:
+	case OVS_ACTION_ATTR_CALC_FIELDS_VERIFY:
+	case OVS_ACTION_ATTR_ADD_HEADER:
+	case OVS_ACTION_ATTR_REMOVE_HEADER:
+	case OVS_ACTION_ATTR_DEPARSE:
+		OVS_NOT_REACHED();
 
     case OVS_ACTION_ATTR_HASH:
     case OVS_ACTION_ATTR_PUSH_VLAN:

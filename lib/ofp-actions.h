@@ -26,6 +26,9 @@
 #include "openflow/nicira-ext.h"
 #include "openvswitch/types.h"
 
+// @P4:
+#include "p4/src/action/ofp-actions.h"
+
 /* List of OVS abstracted actions.
  *
  * This macro is used directly only internally by this header, but the list is
@@ -118,7 +121,17 @@
     OFPACT(CLEAR_ACTIONS,   ofpact_null,        ofpact, "clear_actions") \
     OFPACT(WRITE_ACTIONS,   ofpact_nest,        ofpact, "write_actions") \
     OFPACT(WRITE_METADATA,  ofpact_metadata,    ofpact, "write_metadata") \
-    OFPACT(GOTO_TABLE,      ofpact_goto_table,  ofpact, "goto_table")
+    OFPACT(GOTO_TABLE,      ofpact_goto_table,  ofpact, "goto_table")   \
+	/* @P4: */                                                          \
+    OFPACT(DEPARSE,         ofpact_null,        ofpact, "deparse")      \
+    OFPACT(ADD_HEADER,      ofpact_add_header,  ofpact, "add_header")   \
+    OFPACT(REMOVE_HEADER,   ofpact_remove_header, ofpact, "remove_header") \
+    OFPACT(MODIFY_FIELD,    ofpact_set_field, ofpact, "modify_field")   \
+    OFPACT(CALC_FIELDS_VERIFY, ofpact_calc_fields, ofpact, "calc_fields_verify") \
+    OFPACT(CALC_FIELDS_UPDATE, ofpact_calc_fields, ofpact, "calc_fields_update") \
+    OFPACT(ADD_TO_FIELD,    ofpact_add_to_field, ofpact, "add_to_field") \
+    OFPACT(SUB_FROM_FIELD,  ofpact_sub_from_field, ofpact, "sub_from_field") \
+    OVS_OFPACTS
 
 /* enum ofpact_type, with a member OFPACT_<ENUM> for each action. */
 enum OVS_PACKED_ENUM ofpact_type {
@@ -250,6 +263,9 @@ struct ofpact_output_reg {
     uint16_t max_len;
     struct mf_subfield src;
 };
+
+// @P4:
+OVS_OFPACT_STRUCTS
 
 /* Bundle slave choice algorithm to apply.
  *
@@ -731,6 +747,62 @@ struct ofpact_unroll_xlate {
     /* Metadata in xlate context, visible to controller via PACKET_INs. */
     uint8_t  rule_table_id;       /* 0xFF if none. */
     ovs_be64 rule_cookie;         /* OVS_BE64_MAX if none. */
+};
+
+// @P4:
+/* OFPACT_ADD_HEADER.
+ */
+struct ofpact_add_header {
+    struct ofpact ofpact;
+    uint32_t header_id;
+};
+
+// @P4:
+/* OFPACT_REMOVE_HEADER.
+ */
+struct ofpact_remove_header {
+    struct ofpact ofpact;
+    uint32_t header_id;
+};
+
+// @P4:
+/* NOTE: calculated fields algorithm to apply. */
+enum cf_algorithm {
+    CF_ALGO_CSUM16 = 0,
+};
+
+// @P4:
+#define __MAX_CALC_FIELDS 64
+
+// @P4:
+/* OFPACT_CALC_FIELDS.
+ */
+struct ofpact_calc_fields {
+    struct ofpact ofpact;
+    enum mf_field_id dst_field_id;
+    enum cf_algorithm algorithm;
+    unsigned int n_fields;
+    enum mf_field_id src_field_ids[];
+};
+
+// @P4:
+/* OFPACT_ADD_TO_FIELD.
+ */
+struct ofpact_add_to_field {
+    struct ofpact ofpact;
+    const struct mf_field *field;
+    union mf_value value;
+    union mf_value mask;
+};
+
+// @P4:
+/* OFPACT_SUB_FROM_FIELD.
+ */
+struct ofpact_sub_from_field {
+    struct ofpact ofpact;
+    const struct mf_field *field;
+    union mf_value value;
+    union mf_value mask;
 };
 
 /* Converting OpenFlow to ofpacts. */

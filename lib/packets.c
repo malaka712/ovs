@@ -33,6 +33,10 @@
 #include "dp-packet.h"
 #include "unaligned.h"
 
+// @P4:
+#include "p4/src/match/packets.h"
+#include "p4/src/action/packets.h"
+
 const struct in6_addr in6addr_exact = IN6ADDR_EXACT_INIT;
 const struct in6_addr in6addr_all_hosts = IN6ADDR_ALL_HOSTS_INIT;
 
@@ -1061,4 +1065,35 @@ packet_csum_pseudoheader(const struct ip_header *ip)
                                         IP_IHL(ip->ip_ihl_ver) * 4));
 
     return partial;
+}
+
+// @P4:
+OVS_HDR_DEFS
+OVS_FUNC_DEFS
+
+// @P4:
+void deparse(struct dp_packet *packet)
+{
+    char *data = dp_packet_data(packet);
+
+    /* get new payload offset */
+    uint16_t new_payload_ofs = 0;
+
+    OVS_DEPARSE_NEW_PAYLOAD_OFS
+
+    /* shift payload */
+    if (packet->payload_ofs != new_payload_ofs) {
+        if (dp_packet_get_allocated(packet) >= (new_payload_ofs + (dp_packet_size(packet) - packet->payload_ofs))) {
+            memmove(data + new_payload_ofs, data + packet->payload_ofs, dp_packet_size(packet) - packet->payload_ofs);
+        }
+        else { /* error */ }
+
+        dp_packet_set_size(packet, dp_packet_size(packet) + (new_payload_ofs - packet->payload_ofs));
+        packet->payload_ofs = new_payload_ofs;
+    }
+
+    /* write headers */
+    uint16_t run_ofs = 0;
+
+    OVS_DEPARSE_WRITE_HEADERS
 }

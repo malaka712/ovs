@@ -29,6 +29,9 @@
 #include "hash.h"
 #include "util.h"
 
+// @P4:
+#include "p4/src/match/flow.h"
+
 struct dpif_flow_stats;
 struct ds;
 struct flow_wildcards;
@@ -105,6 +108,9 @@ struct flow {
     uint32_t conj_id;           /* Conjunction ID. */
     ofp_port_t actset_output;   /* Output port in action set. */
     uint8_t pad1[6];            /* Pad to 64 bits. */
+
+    // @P4:
+    OVS_FIELDS
 
     /* L2, Order the same as in the Ethernet header! (64-bit aligned) */
     struct eth_addr dl_dst;     /* Ethernet destination address. */

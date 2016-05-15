@@ -1134,6 +1134,109 @@ is_all_ones(const void *p_, size_t n)
     return true;
 }
 
+// @P4:
+uint64_t be24_to_u64(const uint8_t *value) {
+    uint64_t x = 0;
+
+    x |= value[0]; x <<= 16;
+    x |= value[1]; x <<= 8;
+    x |= value[2];
+
+    return x;
+}
+
+// @P4:
+ovs_be64 u24_to_be64(const uint8_t *value) {
+    return (ovs_be64)be24_to_u64(value);
+}
+
+// @P4:
+uint64_t be40_to_u64(const uint8_t *value) {
+    uint64_t x = 0;
+
+    x |= value[0]; x <<= 32;
+    x |= value[1]; x <<= 24;
+    x |= value[2]; x <<= 16;
+    x |= value[3]; x <<= 8;
+    x |= value[4];
+
+    return x;
+}
+
+// @P4:
+ovs_be64 u40_to_be64(const uint8_t *value) {
+    return (ovs_be64)be40_to_u64(value);
+}
+
+// @P4:
+uint64_t be48_to_u64(const uint8_t *value) {
+    uint64_t x = 0;
+
+    x |= value[0]; x <<= 40;
+    x |= value[1]; x <<= 32;
+    x |= value[2]; x <<= 24;
+    x |= value[3]; x <<= 16;
+    x |= value[4]; x <<= 8;
+    x |= value[5];
+
+    return x;
+}
+
+// @P4:
+ovs_be64 u48_to_be64(const uint8_t *value) {
+    return (ovs_be64)be48_to_u64(value);
+}
+
+// @P4:
+uint64_t be56_to_u64(const uint8_t *value) {
+    uint64_t x = 0;
+
+    x |= value[0]; x <<= 48;
+    x |= value[1]; x <<= 40;
+    x |= value[2]; x <<= 32;
+    x |= value[3]; x <<= 24;
+    x |= value[4]; x <<= 16;
+    x |= value[5]; x <<= 8;
+    x |= value[6];
+
+    return x;
+}
+
+// @P4:
+ovs_be64 u56_to_be64(const uint8_t *value) {
+    return (ovs_be64)be56_to_u64(value);
+}
+
+// @P4:
+void
+apply_mask_0(const uint8_t *src, const uint8_t *mask, uint8_t *dst, size_t n)
+{
+    size_t i;
+
+    for (i = 0; i < n; i++) {
+        dst[i] = (src[i] & mask[i]) | (dst[i] & ~mask[i]);
+    }
+}
+
+
+// @P4:
+void apply_mask_1(const uint8_t *key, const uint8_t * header,
+                    const uint8_t *mask, uint8_t *res, size_t n_bytes) {
+    int i;
+    for (i = 0; i < n_bytes; i++) {
+        res[i] = key[i] | (header[i] & ~mask[i]);
+    }
+}
+
+// @P4:
+void apply_mask_1_u16(const uint16_t *key, const uint16_t * header,
+                    const uint16_t *mask, uint16_t *res, size_t n_shorts) {
+    int i;
+    for (i = 0; i < n_shorts; i++) {
+        res[i] = key[i] | (header[i] & ~mask[i]);
+    }
+}
+
 /* Copies 'n_bits' bits starting from bit 'src_ofs' in 'src' to the 'n_bits'
  * starting from bit 'dst_ofs' in 'dst'.  'src' is 'src_len' bytes long and
  * 'dst' is 'dst_len' bytes long.

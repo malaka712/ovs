@@ -23,6 +23,9 @@
 #include "packets.h"
 #include "tun-metadata.h"
 
+// @P4:
+#include "p4/src/match/match.h"
+
 /* Converts the flow in 'flow' into a match in 'match', with the given
  * 'wildcards'. */
 void
@@ -289,6 +292,22 @@ match_set_dl_type(struct match *match, ovs_be16 dl_type)
 {
     match->wc.masks.dl_type = OVS_BE16_MAX;
     match->flow.dl_type = dl_type;
+}
+
+/* @P4: */
+void
+set_masked(const uint8_t *value_src,
+           const uint8_t *mask_src,
+           uint8_t *value_dst,
+           uint8_t *mask_dst,
+           size_t n_bytes)
+{
+    size_t i;
+
+    for (i = 0; i < n_bytes; i++) {
+        value_dst[i] = value_src[i] & mask_src[i];
+        mask_dst[i] = mask_src[i];
+    }
 }
 
 /* Modifies 'value_src' so that the Ethernet address must match 'value_dst'
@@ -815,6 +834,62 @@ format_ipv6_netmask(struct ds *s, const char *name,
     }
 }
 
+/* @P4: */
+static void
+format_uint16_masked(struct ds *s, const char *name,
+                   uint16_t value, uint16_t mask)
+{
+    if (mask != 0) {
+        ds_put_format(s, "%s=", name);
+        if (mask == UINT16_MAX) {
+            ds_put_format(s, "%"PRIu16, value);
+        } else {
+            ds_put_format(s, "0x%"PRIx16"/0x%"PRIx16, value, mask);
+        }
+        ds_put_char(s, ',');
+    }
+}
+
+/* @P4: */
+static void
+format_bex_masked(struct ds *s, const char *name,
+              const uint8_t *value, const uint8_t *mask, size_t n_bytes)
+{
+    if (!is_all_zeros(mask, n_bytes)) {
+        ds_put_format(s, "%s=", name);
+
+        int i;
+
+        ds_put_format(s, "0x""%02"PRIx8, value[0]);
+        for (i = 1; i < n_bytes; i++) {
+            ds_put_format(s, "%02"PRIx8, value[i]);
+        }
+        ds_put_format(s, "/0x""%02"PRIx8, mask[0]);
+        for (i = 1; i < n_bytes; i++) {
+            ds_put_format(s, "%02"PRIx8, mask[i]);
+        }
+
+        ds_put_char(s, ',');
+    }
+}
+
+/* @P4: */
+static void
+format_be8_masked(struct ds *s, const char *name,
+                  uint8_t value, uint8_t mask)
+{
+    if (mask != 0) {
+        ds_put_format(s, "%s=", name);
+        if (mask == 0xff) {
+            ds_put_format(s, "%"PRIu8, value);
+        } else {
+            ds_put_format(s, "0x%"PRIx8"/0x%"PRIx8,
+                          value, mask);
+        }
+        ds_put_char(s, ',');
+    }
+}
+
 static void
 format_be16_masked(struct ds *s, const char *name,
                    ovs_be16 value, ovs_be16 mask)
@@ -952,6 +1027,9 @@ match_format(const struct match *match, struct ds *s, int priority)
         ofputil_format_port(f->actset_output, s);
         ds_put_char(s, ',');
     }
+
+    // @P4:
+    OVS_MATCH_FORMAT
 
     if (wc->masks.dl_type) {
         skip_type = true;

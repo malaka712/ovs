@@ -34,6 +34,11 @@
 #include "unaligned.h"
 #include "util.h"
 
+// @P4:
+#include "csum.h"
+#include "p4/src/match/odp-execute.h"
+#include "p4/src/action/odp-execute.h"
+
 /* Masked copy of an ethernet address. 'src' is already properly masked. */
 static void
 ether_addr_copy_masked(struct eth_addr *dst, const struct eth_addr src,
@@ -223,6 +228,9 @@ odp_set_nd(struct dp_packet *packet, const struct ovs_key_nd *key,
     }
 }
 
+// @P4:
+OVS_ODP_SET_ACTION_FUNCS
+
 static void
 odp_execute_set_action(struct dp_packet *packet, const struct nlattr *a)
 {
@@ -318,6 +326,9 @@ odp_execute_set_action(struct dp_packet *packet, const struct nlattr *a)
         md->recirc_id = nl_attr_get_u32(a);
         break;
 
+    // @P4:
+    OVS_ODP_EXECUTE_SET_ACTION_CASES
+
     case OVS_KEY_ATTR_UNSPEC:
     case OVS_KEY_ATTR_ENCAP:
     case OVS_KEY_ATTR_ETHERTYPE:
@@ -412,6 +423,9 @@ odp_execute_masked_set_action(struct dp_packet *packet,
             | (md->recirc_id & ~*get_mask(a, uint32_t));
         break;
 
+    // @P4:
+    OVS_ODP_EXECUTE_MASKED_SET_ACTION_CASES
+
     case OVS_KEY_ATTR_TUNNEL:    /* Masked data not supported for tunnel. */
     case OVS_KEY_ATTR_UNSPEC:
     case OVS_KEY_ATTR_ENCAP:
@@ -464,6 +478,206 @@ odp_execute_sample(void *dp, struct dp_packet *packet, bool steal,
                         nl_attr_get_size(subactions), dp_execute_action);
 }
 
+// @P4:
+OVS_ODP_EXECUTE_FUNCS
+
+/* @P4: */
+// TODO: can have a more cleaner implementation?
+// For now assuming a fixed length buffer for csum (i.e., __OVS_CALC_FIELD_ATTR_MAX*8).
+// We assume maximum field size to be 64bits.
+uint8_t calc_fields_verify_buf[__OVS_CALC_FIELD_ATTR_MAX*8];
+static bool
+odp_execute_calc_fields_verify(struct dp_packet *packet,
+                               const struct nlattr *a)
+{
+    enum ovs_calc_field_attr dst_field_key = nl_attr_type(a); a = nl_attr_next(a);
+    enum ovs_cf_algorithm algorithm = nl_attr_get_u16(a);     a = nl_attr_next(a);
+    uint16_t n_fields = nl_attr_get_u16(a);                   a = nl_attr_next(a);
+
+    const struct nlattr *a_;
+    size_t left, n_bytes;
+    uint8_t *buf = calc_fields_verify_buf;
+
+    NL_NESTED_FOR_EACH_UNSAFE(a_, left, a){
+        switch ((enum ovs_calc_field_attr) nl_attr_type(a_)) {
+        OVS_ODP_EXECUTE_CALC_FIELDS_SRCS_CASES
+
+        case OVS_CALC_FIELD_ATTR_UNSPEC:
+        case __OVS_CALC_FIELD_ATTR_MAX:
+        default:
+            OVS_NOT_REACHED();
+        }
+    }
+
+    n_bytes = buf - calc_fields_verify_buf;
+
+    switch(algorithm) {
+    case OVS_CF_ALGO_CSUM16: {
+        ovs_be16 res16 = csum(calc_fields_verify_buf, n_bytes);
+
+        switch (dst_field_key) {
+        OVS_ODP_EXECUTE_CALC_FIELDS_VERIFY_DST_FIELD_16BIT_CASES
+
+        case OVS_CALC_FIELD_ATTR_UNSPEC:
+        case __OVS_CALC_FIELD_ATTR_MAX:
+        default:
+            OVS_NOT_REACHED();
+        }
+    }
+
+    default:
+        OVS_NOT_REACHED();
+    }
+}
+
+/* @P4: */
+// TODO: can have a more cleaner implementation?
+// For now assuming a fixed length buffer for csum (i.e., __OVS_CALC_FIELD_ATTR_MAX*8).
+// We assume maximum field size to be 64bits.
+uint8_t calc_fields_update_buf[__OVS_CALC_FIELD_ATTR_MAX*8];
+static void
+odp_execute_calc_fields_update(struct dp_packet *packet,
+                               const struct nlattr *a)
+{
+    enum ovs_calc_field_attr dst_field_key = nl_attr_type(a); a = nl_attr_next(a);
+    enum ovs_cf_algorithm algorithm = nl_attr_get_u16(a);     a = nl_attr_next(a);
+    uint16_t n_fields = nl_attr_get_u16(a);                   a = nl_attr_next(a);
+
+    const struct nlattr *a_;
+    size_t left, n_bytes;
+    uint8_t *buf = calc_fields_update_buf;
+
+    NL_NESTED_FOR_EACH_UNSAFE(a_, left, a){
+        switch ((enum ovs_calc_field_attr) nl_attr_type(a_)) {
+        OVS_ODP_EXECUTE_CALC_FIELDS_SRCS_CASES
+
+        case OVS_CALC_FIELD_ATTR_UNSPEC:
+        case __OVS_CALC_FIELD_ATTR_MAX:
+        default:
+            OVS_NOT_REACHED();
+        }
+    }
+
+    n_bytes = buf - calc_fields_update_buf;
+
+    switch(algorithm) {
+    case OVS_CF_ALGO_CSUM16: {
+        ovs_be16 res16 = csum(calc_fields_update_buf, n_bytes);
+
+        switch (dst_field_key) {
+        OVS_ODP_EXECUTE_CALC_FIELDS_UPDATE_DST_FIELD_16BIT_CASES
+
+        case OVS_CALC_FIELD_ATTR_UNSPEC:
+        case __OVS_CALC_FIELD_ATTR_MAX:
+        default:
+            OVS_NOT_REACHED();
+        }
+        break;
+    }
+
+    default:
+        OVS_NOT_REACHED();
+    }
+}
+
+/* @P4: */
+static void
+odp_execute_sub_from_field(struct dp_packet *packet,
+                           const struct nlattr *a)
+{
+    enum ovs_key_attr key = nl_attr_type(a);
+
+    switch (key) {
+    OVS_ODP_EXECUTE_SUB_FROM_FIELD_CASES /* @Shahbaz: */
+
+    case OVS_KEY_ATTR_UNSPEC:
+    case __OVS_KEY_ATTR_MAX:
+    default:
+        OVS_NOT_REACHED();
+    }
+}
+
+/* @P4: */
+static void
+odp_execute_add_to_field(struct dp_packet *packet,
+                         const struct nlattr *a)
+{
+    enum ovs_key_attr key = nl_attr_type(a);
+
+    switch (key) {
+    OVS_ODP_EXECUTE_ADD_TO_FIELD_CASES /* @Shahbaz: */
+
+    case OVS_KEY_ATTR_UNSPEC:
+    case __OVS_KEY_ATTR_MAX:
+    default:
+        OVS_NOT_REACHED();
+    }
+}
+
+/* @P4: */
+static void
+odp_execute_add_header(struct dp_packet *packet,
+					   const struct nlattr *a)
+{
+	enum ovs_key_attr key = nl_attr_type(a);
+    char *data = dp_packet_data(packet);
+
+    /* get header offset */
+	uint16_t header_ofs = 0;
+    uint16_t header_size = 0;
+
+    OVS_ODP_EXECUTE_ADD_HEADER_GET_OFS /* @Shahbaz: */
+
+	OVS_NOT_REACHED();
+
+	/* push header */
+push:
+	if (dp_packet_get_allocated(packet) >= (dp_packet_size(packet) + header_size)) {
+		memmove(data + header_ofs + header_size, data + header_ofs, dp_packet_size(packet) - header_ofs);
+		dp_packet_set_size(packet, dp_packet_size(packet) + header_size);
+	}
+	else { /* error */
+		OVS_NOT_REACHED();
+	}
+
+	header_ofs = 0;
+
+	/* set header offsets */
+	OVS_ODP_EXECUTE_ADD_REMOVE_HEADER_SET_OFS /* @Shahbaz: */
+}
+
+/* @P4: */
+static void
+odp_execute_remove_header(struct dp_packet *packet,
+					      const struct nlattr *a)
+{
+	enum ovs_key_attr key = nl_attr_type(a);
+    char *data = dp_packet_data(packet);
+
+    /* get header offset */
+	uint16_t header_ofs = 0;
+    uint16_t header_size = 0;
+
+    OVS_ODP_EXECUTE_REMOVE_HEADER_GET_OFS /* @Shahbaz: */
+
+	OVS_NOT_REACHED();
+
+	/* push header */
+pop:
+	if (dp_packet_get_allocated(packet) >= (dp_packet_size(packet) - header_size)) {
+		memmove(data + header_ofs, data + header_ofs + header_size, dp_packet_size(packet) - header_ofs - header_size);
+		dp_packet_set_size(packet, dp_packet_size(packet) - header_size);
+	}
+	else { /* error */
+		OVS_NOT_REACHED();
+	}
+
+	header_ofs = 0;
+
+	/* set header offsets */
+	OVS_ODP_EXECUTE_ADD_REMOVE_HEADER_SET_OFS /* @Shahbaz: */
+}
+
 static bool
 requires_datapath_assistance(const struct nlattr *a)
 {
@@ -487,6 +701,19 @@ requires_datapath_assistance(const struct nlattr *a)
     case OVS_ACTION_ATTR_PUSH_MPLS:
     case OVS_ACTION_ATTR_POP_MPLS:
         return false;
+
+    // @P4:
+	OVS_REQUIRES_DATAPATH_ASSISTANCE_CASES
+
+    // @P4:
+	case OVS_ACTION_ATTR_SUB_FROM_FIELD:
+	case OVS_ACTION_ATTR_ADD_TO_FIELD:
+	case OVS_ACTION_ATTR_CALC_FIELDS_UPDATE:
+	case OVS_ACTION_ATTR_CALC_FIELDS_VERIFY:
+	case OVS_ACTION_ATTR_ADD_HEADER:
+	case OVS_ACTION_ATTR_REMOVE_HEADER:
+	case OVS_ACTION_ATTR_DEPARSE:
+		return false;
 
     case OVS_ACTION_ATTR_UNSPEC:
     case __OVS_ACTION_ATTR_MAX:
@@ -605,6 +832,78 @@ odp_execute_actions(void *dp, struct dp_packet **packets, int cnt, bool steal,
                 return;
             }
             break;
+
+        // @P4:
+		OVS_ODP_EXECUTE_ACTIONS_CASES
+
+		/* @P4: */
+		case OVS_ACTION_ATTR_CALC_FIELDS_UPDATE: {
+			for (i = 0; i < cnt; i++) {
+				odp_execute_calc_fields_update(packets[i], nl_attr_get(a));
+			}
+			break;
+		}
+
+		/* @P4: */
+		case OVS_ACTION_ATTR_SUB_FROM_FIELD: {
+			for (i = 0; i < cnt; i++) {
+				odp_execute_sub_from_field(packets[i], nl_attr_get(a));
+			}
+			break;
+		}
+
+		/* @P4: */
+		case OVS_ACTION_ATTR_ADD_TO_FIELD: {
+			for (i = 0; i < cnt; i++) {
+				odp_execute_add_to_field(packets[i], nl_attr_get(a));
+			}
+			break;
+		}
+
+		/* @P4: */
+		case OVS_ACTION_ATTR_ADD_HEADER: {
+			for (i = 0; i < cnt; i++) {
+				odp_execute_add_header(packets[i], nl_attr_get(a));
+			}
+			break;
+		}
+
+		/* @P4: */
+		case OVS_ACTION_ATTR_REMOVE_HEADER: {
+			for (i = 0; i < cnt; i++) {
+				odp_execute_remove_header(packets[i], nl_attr_get(a));
+			}
+			break;
+		}
+
+		/* @P4: */
+		case OVS_ACTION_ATTR_CALC_FIELDS_VERIFY: {
+			int j;
+			for (i = j = 0; i < cnt; i++) {
+				if (!odp_execute_calc_fields_verify(packets[i], nl_attr_get(a))) {
+					if (!steal) {
+						ovs_assert(cnt == 1);
+						return;
+					}
+					dp_packet_delete(packets[i]);
+				}
+				else {
+					packets[j++] = packets[i];
+				}
+			}
+			cnt = j;
+			if (!cnt) {
+				return;
+			}
+			break;
+		}
+
+		/* @P4: */
+		case OVS_ACTION_ATTR_DEPARSE:
+			for (i = 0; i < cnt; i++) {
+				deparse(packets[i]);
+			}
+			break;
 
         case OVS_ACTION_ATTR_OUTPUT:
         case OVS_ACTION_ATTR_TUNNEL_PUSH:

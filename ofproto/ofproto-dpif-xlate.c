@@ -59,6 +59,9 @@
 #include "tunnel.h"
 #include "openvswitch/vlog.h"
 
+// @P4:
+#include "p4/src/action/ofproto/ofproto-dpif-xlate.h"
+
 COVERAGE_DEFINE(xlate_actions);
 COVERAGE_DEFINE(xlate_actions_oversize);
 COVERAGE_DEFINE(xlate_actions_too_many_output);
@@ -3687,6 +3690,9 @@ compose_dec_mpls_ttl_action(struct xlate_ctx *ctx)
     return true;
 }
 
+// @P4:
+OVS_ACTION_HELPER_FUNCS
+
 static void
 xlate_output_action(struct xlate_ctx *ctx,
                     ofp_port_t port, uint16_t max_len, bool may_packet_in)
@@ -4098,7 +4104,20 @@ recirc_unroll_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
         case OFPACT_DEBUG_RECIRC:
             break;
 
-            /* These need not be copied for restoration. */
+        // @P4:
+        OVS_RECIRC_UNROLL_ACTIONS_CASES
+
+		// @P4:
+		case OFPACT_CALC_FIELDS_UPDATE:
+		case OFPACT_CALC_FIELDS_VERIFY:
+		case OFPACT_SUB_FROM_FIELD:
+		case OFPACT_ADD_TO_FIELD:
+		case OFPACT_MODIFY_FIELD:
+		case OFPACT_REMOVE_HEADER:
+		case OFPACT_ADD_HEADER:
+		case OFPACT_DEPARSE:
+			break;
+
         case OFPACT_NOTE:
         case OFPACT_CONJUNCTION:
             continue;
@@ -4117,6 +4136,322 @@ recirc_unroll_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
     if (COND) {                           \
         CHECK_MPLS_RECIRCULATION();       \
     }
+
+// @P4:
+OVS_COMPOSE_AND_XLATE_FUNCS
+
+// @P4:
+static void
+compose_calc_fields_verify(struct xlate_ctx *ctx,
+                           const struct ofpact_calc_fields *cf)
+{
+    struct flow_wildcards *wc = ctx->wc;
+    struct flow *flow = &ctx->xin->flow;
+    bool use_masked = ctx->xbridge->support.masked_set_action;
+    ctx->xout->slow |= commit_odp_actions(&ctx->xin->flow, &ctx->base_flow,
+                                          ctx->odp_actions, ctx->wc,
+                                          use_masked);
+
+    size_t i;
+    size_t offset = nl_msg_start_nested(ctx->odp_actions,
+                                        OVS_ACTION_ATTR_CALC_FIELDS_VERIFY);
+
+    switch (cf->dst_field_id) {
+    OVS_COMPOSE_CALC_FIELDS_CASES
+
+    case MFF_N_IDS:
+    default:
+        OVS_NOT_REACHED();
+    }
+
+    switch(cf->algorithm) {
+    case CF_ALGO_CSUM16:
+        nl_msg_put_u16(ctx->odp_actions, OVS_CALC_FIELD_ATTR_UNSPEC, OVS_CF_ALGO_CSUM16);
+        break;
+
+    default:
+        OVS_NOT_REACHED();
+    }
+
+    nl_msg_put_u16(ctx->odp_actions, OVS_CALC_FIELD_ATTR_UNSPEC, cf->n_fields);
+
+    size_t f_offset = nl_msg_start_nested(ctx->odp_actions,
+                                          OVS_CALC_FIELD_ATTR_UNSPEC);
+
+    for (i = 0; i < cf->n_fields; i++) {
+        switch (cf->src_field_ids[i]) {
+        OVS_COMPOSE_CALC_FIELDS_CASES
+
+        case MFF_N_IDS:
+        default:
+            OVS_NOT_REACHED();
+        }
+    }
+
+    nl_msg_end_nested(ctx->odp_actions, f_offset);
+    nl_msg_end_nested(ctx->odp_actions, offset);
+}
+
+// @P4:
+static void
+compose_calc_fields_update(struct xlate_ctx *ctx,
+                           const struct ofpact_calc_fields *cf)
+{
+    struct flow_wildcards *wc = ctx->wc;
+    struct flow *flow = &ctx->xin->flow;
+    bool use_masked = ctx->xbridge->support.masked_set_action;
+    ctx->xout->slow |= commit_odp_actions(&ctx->xin->flow, &ctx->base_flow,
+                                          ctx->odp_actions, ctx->wc,
+                                          use_masked);
+
+    size_t i;
+    size_t offset = nl_msg_start_nested(ctx->odp_actions,
+                                        OVS_ACTION_ATTR_CALC_FIELDS_UPDATE);
+
+    switch (cf->dst_field_id) {
+    OVS_COMPOSE_CALC_FIELDS_CASES
+
+    case MFF_N_IDS:
+    default:
+        OVS_NOT_REACHED();
+    }
+
+    switch(cf->algorithm) {
+    case CF_ALGO_CSUM16:
+        nl_msg_put_u16(ctx->odp_actions, OVS_CALC_FIELD_ATTR_UNSPEC, OVS_CF_ALGO_CSUM16);
+        break;
+
+    default:
+        OVS_NOT_REACHED();
+    }
+
+    nl_msg_put_u16(ctx->odp_actions, OVS_CALC_FIELD_ATTR_UNSPEC, cf->n_fields);
+
+    size_t f_offset = nl_msg_start_nested(ctx->odp_actions,
+                                          OVS_CALC_FIELD_ATTR_UNSPEC);
+
+    for (i = 0; i < cf->n_fields; i++) {
+        switch (cf->src_field_ids[i]) {
+        OVS_COMPOSE_CALC_FIELDS_CASES
+
+        case MFF_N_IDS:
+        default:
+            OVS_NOT_REACHED();
+        }
+    }
+
+    nl_msg_end_nested(ctx->odp_actions, f_offset);
+    nl_msg_end_nested(ctx->odp_actions, offset);
+}
+
+// @P4:
+/* Consider each of 'src', 'mask', and 'dst' as if they were arrays of 8*n
+ * bits.  Then, for each 0 <= i < 8 * n such that mask[i] == 1, sets dst[i] =
+ * src[i].  */
+static void
+apply_mask(const uint8_t *src, const uint8_t *mask, uint8_t *dst, size_t n)
+{
+    size_t i;
+    for (i = 0; i < n; i++) {
+        dst[i] = (src[i] & mask[i]) | (dst[i] & ~mask[i]);
+    }
+}
+
+// @P4:
+static void
+xlate_sub_from_field(struct xlate_ctx *ctx,
+                     const struct ofpact_sub_from_field *sub_from_field)
+{
+    struct flow_wildcards *wc = ctx->wc;
+    struct flow *flow = &ctx->xin->flow;
+
+    const struct mf_field *mf = sub_from_field->field;
+    const union mf_value *value = &sub_from_field->value;
+
+    // @Sean: handling cases for masked field
+    const union mf_value *mask = &sub_from_field->mask;
+
+    mf_mask_field_and_prereqs(mf, wc);
+    if (mf_are_prereqs_ok(mf, flow)) {
+        switch (mf->id) {
+        OVS_XLATE_SUB_FROM_FIELD_CASES
+
+        case MFF_N_IDS:
+        default:
+            OVS_NOT_REACHED();
+        }
+    }
+}
+
+// @P4:
+static void
+compose_sub_from_field_(struct xlate_ctx *ctx, enum ovs_key_attr key,
+                        const void *value, size_t size)
+{
+    size_t offset = nl_msg_start_nested(ctx->odp_actions,
+                                        OVS_ACTION_ATTR_SUB_FROM_FIELD);
+    char *data = nl_msg_put_unspec_uninit(ctx->odp_actions, key, size);
+    memcpy(data, value, size);
+    nl_msg_end_nested(ctx->odp_actions, offset);
+}
+
+// @P4:
+static void
+compose_sub_from_field(struct xlate_ctx *ctx,
+                       const struct ofpact_sub_from_field *sub_from_field)
+{
+    struct flow_wildcards *wc = ctx->wc;
+    struct flow *flow = &ctx->xin->flow;
+    bool use_masked = ctx->xbridge->support.masked_set_action;
+    ctx->xout->slow |= commit_odp_actions(&ctx->xin->flow, &ctx->base_flow,
+                                          ctx->odp_actions, ctx->wc,
+                                          use_masked);
+
+
+    const struct mf_field *mf = sub_from_field->field;
+    const union mf_value *value = &sub_from_field->value;
+
+	// TODO: 1. handle subtraction for masked fields.
+	// const union mf_value *mask = &sub_from_field->mask;
+
+    mf_mask_field_and_prereqs(mf, wc);
+    if (mf_are_prereqs_ok(mf, flow)) {
+        switch (mf->id) {
+        OVS_COMPOSE_SUB_FROM_FIELD_CASES
+
+        case MFF_N_IDS:
+        default:
+            OVS_NOT_REACHED();
+        }
+    }
+}
+
+// @P4:
+static void
+xlate_add_to_field(struct xlate_ctx *ctx,
+                   const struct ofpact_add_to_field *add_to_field)
+{
+    struct flow_wildcards *wc = ctx->wc;
+    struct flow *flow = &ctx->xin->flow;
+
+    const struct mf_field *mf = add_to_field->field;
+    const union mf_value *value = &add_to_field->value;
+
+    // TODO: 1. handle subtraction for masked fields. Pull in the pull-request from Sean.
+    const union mf_value *mask = &add_to_field->mask;
+
+    mf_mask_field_and_prereqs(mf, wc);
+    if (mf_are_prereqs_ok(mf, flow)) {
+        switch (mf->id) {
+        OVS_XLATE_ADD_TO_FIELD_CASES
+
+        case MFF_N_IDS:
+        default:
+            OVS_NOT_REACHED();
+        }
+    }
+}
+
+// @P4:
+static void
+compose_add_to_field_(struct xlate_ctx *ctx, enum ovs_key_attr key,
+                     const void *value, size_t size)
+{
+    size_t offset = nl_msg_start_nested(ctx->odp_actions,
+                                        OVS_ACTION_ATTR_ADD_TO_FIELD);
+    char *data = nl_msg_put_unspec_uninit(ctx->odp_actions, key, size);
+    memcpy(data, value, size);
+    nl_msg_end_nested(ctx->odp_actions, offset);
+}
+
+// @P4:
+static void
+compose_add_to_field(struct xlate_ctx *ctx,
+                   const struct ofpact_add_to_field *add_to_field)
+{
+    struct flow_wildcards *wc = ctx->wc;
+    struct flow *flow = &ctx->xin->flow;
+    bool use_masked = ctx->xbridge->support.masked_set_action;
+    ctx->xout->slow |= commit_odp_actions(&ctx->xin->flow, &ctx->base_flow,
+                                          ctx->odp_actions, ctx->wc,
+                                          use_masked);
+
+    const struct mf_field *mf = add_to_field->field;
+    const union mf_value *value = &add_to_field->value;
+
+    // TODO: 1. handle addition for masked fields.
+    // const union mf_value *mask = &add_to_field->mask;
+
+    mf_mask_field_and_prereqs(mf, wc);
+    if (mf_are_prereqs_ok(mf, flow)) {
+        switch (mf->id) {
+        OVS_COMPOSE_ADD_TO_FIELD_CASES
+
+        case MFF_N_IDS:
+        default:
+            OVS_NOT_REACHED();
+        }
+    }
+}
+
+// @P4:
+static void
+compose_add_header(struct xlate_ctx *ctx,
+                   const struct ofpact_add_header *add_header)
+{
+	bool use_masked = ctx->xbridge->support.masked_set_action;
+	ctx->xout->slow |= commit_odp_actions(&ctx->xin->flow, &ctx->base_flow,
+									  ctx->odp_actions, ctx->wc,
+									  use_masked);
+
+	size_t offset = nl_msg_start_nested(ctx->odp_actions,
+	                                    OVS_ACTION_ATTR_ADD_HEADER);
+
+	switch ((enum mf_field_id)add_header->header_id) {
+	OVS_COMPOSE_ADD_REMOVE_HEADER_CASES
+
+	case MFF_N_IDS:
+	default:
+		OVS_NOT_REACHED();
+	}
+
+	nl_msg_end_nested(ctx->odp_actions, offset);
+}
+
+// @P4:
+static void
+compose_remove_header(struct xlate_ctx *ctx,
+                      const struct ofpact_remove_header *remove_header)
+{
+	bool use_masked = ctx->xbridge->support.masked_set_action;
+	ctx->xout->slow |= commit_odp_actions(&ctx->xin->flow, &ctx->base_flow,
+									  ctx->odp_actions, ctx->wc,
+									  use_masked);
+
+	size_t offset = nl_msg_start_nested(ctx->odp_actions,
+	                                    OVS_ACTION_ATTR_REMOVE_HEADER);
+
+	switch ((enum mf_field_id)remove_header->header_id) {
+	OVS_COMPOSE_ADD_REMOVE_HEADER_CASES
+
+	case MFF_N_IDS:
+	default:
+		OVS_NOT_REACHED();
+	}
+
+	nl_msg_end_nested(ctx->odp_actions, offset);
+}
+
+// @P4:
+static void
+compose_deparse(struct xlate_ctx *ctx)
+{
+    bool use_masked = ctx->xbridge->support.masked_set_action;
+    ctx->xout->slow |= commit_odp_actions(&ctx->xin->flow, &ctx->base_flow,
+                                      ctx->odp_actions, ctx->wc,
+                                      use_masked);
+    nl_msg_put_flag(ctx->odp_actions, OVS_ACTION_ATTR_DEPARSE);
+}
 
 static void
 do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
@@ -4486,7 +4821,69 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
             ctx_trigger_recirculation(ctx);
             a = ofpact_next(a);
             break;
-        }
+
+        // @P4:
+        OVS_DO_XLATE_ACTIONS_CASES
+
+		// @P4:
+		case OFPACT_SUB_FROM_FIELD: {
+			const struct ofpact_sub_from_field *sub_from_field;
+			sub_from_field = ofpact_get_SUB_FROM_FIELD(a);
+//            compose_sub_from_field(ctx, sub_from_field);
+			xlate_sub_from_field(ctx, sub_from_field);
+			break;
+		}
+
+		// @P4:
+		case OFPACT_ADD_TO_FIELD: {
+			const struct ofpact_add_to_field *add_to_field;
+			add_to_field = ofpact_get_ADD_TO_FIELD(a);
+//            compose_add_to_field(ctx, add_to_field);
+			xlate_add_to_field(ctx, add_to_field);
+			break;
+		}
+
+		// @P4:
+		case OFPACT_CALC_FIELDS_UPDATE: {
+			const struct ofpact_calc_fields *calc_fields;
+			calc_fields = ofpact_get_CALC_FIELDS_UPDATE(a);
+			compose_calc_fields_update(ctx, calc_fields);
+			break;
+		}
+
+		// @P4:
+		case OFPACT_CALC_FIELDS_VERIFY: {
+			const struct ofpact_calc_fields *calc_fields;
+			calc_fields = ofpact_get_CALC_FIELDS_VERIFY(a);
+			compose_calc_fields_verify(ctx, calc_fields);
+			break;
+		}
+
+		// @P4:
+		case OFPACT_ADD_HEADER: {
+			const struct ofpact_add_header *add_header;
+			add_header = ofpact_get_ADD_HEADER(a);
+			compose_add_header(ctx, add_header);
+			break;
+		}
+
+		// @P4:
+		case OFPACT_REMOVE_HEADER:{
+			const struct ofpact_remove_header *remove_header;
+			remove_header = ofpact_get_REMOVE_HEADER(a);
+			compose_remove_header(ctx, remove_header);
+			break;
+		}
+
+		// @P4:
+		case OFPACT_MODIFY_FIELD:
+			break;
+
+        // @P4:
+		case OFPACT_DEPARSE:
+			compose_deparse(ctx);
+			break;
+		}
 
         /* Check if need to store this and the remaining actions for later
          * execution. */

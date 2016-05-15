@@ -530,6 +530,22 @@ static inline ovs_be32 be32_prefix_mask(int plen)
     return htonl((uint64_t)UINT32_MAX << (32 - plen));
 }
 
+// @P4:
+uint64_t be24_to_u64(const uint8_t *);
+uint64_t be40_to_u64(const uint8_t *);
+uint64_t be48_to_u64(const uint8_t *);
+uint64_t be56_to_u64(const uint8_t *);
+ovs_be64 u24_to_be64(const uint8_t *);
+ovs_be64 u40_to_be64(const uint8_t *);
+ovs_be64 u48_to_be64(const uint8_t *);
+ovs_be64 u56_to_be64(const uint8_t *);
+void apply_mask_0(const uint8_t *src, const uint8_t *mask, uint8_t *dst,
+                  size_t n);
+void apply_mask_1(const uint8_t *key, const uint8_t * header,
+                  const uint8_t *mask, uint8_t *res, size_t);
+void apply_mask_1_u16(const uint16_t *key, const uint16_t * header,
+                    const uint16_t *mask, uint16_t *res, size_t);
+
 bool is_all_zeros(const void *, size_t);
 bool is_all_ones(const void *, size_t);
 void bitwise_copy(const void *src, unsigned int src_len, unsigned int src_ofs,

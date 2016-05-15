@@ -44,6 +44,10 @@
 #include "ofproto-provider.h"
 #include "lacp.h"
 
+// @P4:
+#include "p4/src/match/ofproto/ofproto-dpif-sflow.h"
+#include "p4/src/action/ofproto/ofproto-dpif-sflow.h"
+
 VLOG_DEFINE_THIS_MODULE(sflow);
 
 static struct ovs_mutex mutex;
@@ -1024,6 +1028,9 @@ sflow_read_set_action(const struct nlattr *attr,
         }
         break;
 
+    // @P4:
+	OVS_SFLOW_READ_SET_ACTION_CASES
+
     case OVS_KEY_ATTR_TCP_FLAGS:
     case OVS_KEY_ATTR_ICMP:
     case OVS_KEY_ATTR_ICMPV6:
@@ -1166,6 +1173,20 @@ dpif_sflow_read_actions(const struct flow *flow,
 	    dpif_sflow_pop_mpls_lse(sflow_actions);
 	    break;
 	}
+
+	// @P4:
+	OVS_SFLOW_READ_ACTIONS_CASES
+
+	// @P4:
+	case OVS_ACTION_ATTR_SUB_FROM_FIELD:
+	case OVS_ACTION_ATTR_ADD_TO_FIELD:
+	case OVS_ACTION_ATTR_CALC_FIELDS_UPDATE:
+	case OVS_ACTION_ATTR_CALC_FIELDS_VERIFY:
+	case OVS_ACTION_ATTR_ADD_HEADER:
+	case OVS_ACTION_ATTR_REMOVE_HEADER:
+	case OVS_ACTION_ATTR_DEPARSE:
+		break;
+
 	case OVS_ACTION_ATTR_SAMPLE:
 	case OVS_ACTION_ATTR_UNSPEC:
 	case __OVS_ACTION_ATTR_MAX:

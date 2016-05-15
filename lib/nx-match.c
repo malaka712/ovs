@@ -36,6 +36,9 @@
 #include "util.h"
 #include "openvswitch/vlog.h"
 
+// @P4:
+#include "p4/src/match/nx-match.h"
+
 VLOG_DEFINE_THIS_MODULE(nx_match);
 
 /* OXM headers.
@@ -1000,6 +1003,9 @@ nx_put_raw(struct ofpbuf *b, enum ofp_version oxm, const struct match *match,
         nxm_put_eth_masked(b, MFF_ARP_THA, oxm,
                            flow->arp_tha, match->wc.masks.arp_tha);
     }
+
+    // @P4:
+    OVS_MATCH_PUT_RAW
 
     /* Tunnel ID. */
     nxm_put_64m(b, MFF_TUN_ID, oxm,

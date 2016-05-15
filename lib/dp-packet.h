@@ -24,6 +24,9 @@
 #include "util.h"
 #include "netdev-dpdk.h"
 
+// @P4:
+#include "p4/src/match/dp-packet.h"
+
 #ifdef  __cplusplus
 extern "C" {
 #endif
@@ -51,6 +54,11 @@ struct dp_packet {
     bool rss_hash_valid;        /* Is the 'rss_hash' valid? */
 #endif
     enum dp_packet_source source;  /* Source of memory allocated as 'base'. */
+
+    // @P4:
+    /* TODO: move this to top, otherwise this results in cache miss and significantly degrades miniflow_extract() performance. */
+    OVS_HDR_ATTRS
+
     uint8_t l2_pad_size;           /* Detected l2 padding size.
                                     * Padding is non-pullable. */
     uint16_t l2_5_ofs;             /* MPLS label stack offset, or UINT16_MAX */
@@ -264,11 +272,17 @@ dp_packet_l2(const struct dp_packet *b)
 static inline void
 dp_packet_reset_offsets(struct dp_packet *b)
 {
-    b->l2_pad_size = 0;
-    b->l2_5_ofs = UINT16_MAX;
-    b->l3_ofs = UINT16_MAX;
-    b->l4_ofs = UINT16_MAX;
+//    b->l2_pad_size = 0;
+//    b->l2_5_ofs = UINT16_MAX;
+//    b->l3_ofs = UINT16_MAX;
+//    b->l4_ofs = UINT16_MAX;
+
+    // @P4:
+    OVS_HDR_RESET_ATTRS
 }
+
+// @P4:
+OVS_HDR_GET_DP_PACKET_OFS
 
 static inline uint8_t
 dp_packet_l2_pad_size(const struct dp_packet *b)

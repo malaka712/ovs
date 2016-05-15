@@ -20,6 +20,9 @@
 #include <sys/types.h>
 #include <stdint.h>
 
+// @P4:
+#include "p4/src/match/openvswitch/types.h"
+
 #ifdef __CHECKER__
 #define OVS_BITWISE __attribute__((bitwise))
 #define OVS_FORCE __attribute__((force))
@@ -115,5 +118,8 @@ struct eth_addr {
         ovs_be16 be16[3];
     };
 };
+
+// @P4:
+OVS_FIELD_STRUCTS
 
 #endif /* openvswitch/types.h */
