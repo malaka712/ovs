@@ -280,6 +280,9 @@ BUILD_MESSAGE("FLOW_WC_SEQ changed: miniflow_extract() will have runtime "
 #define miniflow_push_words(MF, FIELD, VALUEP, N_WORDS)                 \
     miniflow_push_words_(MF, offsetof(struct flow, FIELD), VALUEP, N_WORDS)
 
+#define miniflow_push_bytes__word_aligned(MF, FIELD, VALUEP, N_BYTES, N_WORDS)                 \
+    miniflow_push_bytes__word_aligned_(MF, offsetof(struct flow, FIELD), VALUEP, N_BYTES, N_WORDS)
+
 #define miniflow_push_words_32(MF, FIELD, VALUEP, N_WORDS)              \
     miniflow_push_words_32_(MF, offsetof(struct flow, FIELD), VALUEP, N_WORDS)
 
