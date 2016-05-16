@@ -631,7 +631,7 @@ odp_execute_remove_header(struct dp_packet *packet,
 {
 	enum ovs_key_attr key = nl_attr_type(a);
 
-    OVS_ODP_EXECUTE_REMOVE_HEADER
+    OVS_ODP_EXECUTE_REMOVE_HEADER /* @P4: */
 }
 
 static bool
