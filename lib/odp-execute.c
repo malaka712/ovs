@@ -619,31 +619,9 @@ static void
 odp_execute_add_header(struct dp_packet *packet,
 					   const struct nlattr *a)
 {
-	enum ovs_key_attr key = nl_attr_type(a);
-    char *data = dp_packet_data(packet);
+    enum ovs_key_attr key = nl_attr_type(a);
 
-    /* get header offset */
-	uint16_t header_ofs = 0;
-    uint16_t header_size = 0;
-
-    OVS_ODP_EXECUTE_ADD_HEADER_GET_OFS /* @Shahbaz: */
-
-	OVS_NOT_REACHED();
-
-	/* push header */
-push:
-	if (dp_packet_get_allocated(packet) >= (dp_packet_size(packet) + header_size)) {
-		memmove(data + header_ofs + header_size, data + header_ofs, dp_packet_size(packet) - header_ofs);
-		dp_packet_set_size(packet, dp_packet_size(packet) + header_size);
-	}
-	else { /* error */
-		OVS_NOT_REACHED();
-	}
-
-	header_ofs = 0;
-
-	/* set header offsets */
-	OVS_ODP_EXECUTE_ADD_REMOVE_HEADER_SET_OFS /* @Shahbaz: */
+    OVS_ODP_EXECUTE_ADD_HEADER /* @P4: */
 }
 
 /* @P4: */
@@ -652,30 +630,8 @@ odp_execute_remove_header(struct dp_packet *packet,
 					      const struct nlattr *a)
 {
 	enum ovs_key_attr key = nl_attr_type(a);
-    char *data = dp_packet_data(packet);
 
-    /* get header offset */
-	uint16_t header_ofs = 0;
-    uint16_t header_size = 0;
-
-    OVS_ODP_EXECUTE_REMOVE_HEADER_GET_OFS /* @Shahbaz: */
-
-	OVS_NOT_REACHED();
-
-	/* push header */
-pop:
-	if (dp_packet_get_allocated(packet) >= (dp_packet_size(packet) - header_size)) {
-		memmove(data + header_ofs, data + header_ofs + header_size, dp_packet_size(packet) - header_ofs - header_size);
-		dp_packet_set_size(packet, dp_packet_size(packet) - header_size);
-	}
-	else { /* error */
-		OVS_NOT_REACHED();
-	}
-
-	header_ofs = 0;
-
-	/* set header offsets */
-	OVS_ODP_EXECUTE_ADD_REMOVE_HEADER_SET_OFS /* @Shahbaz: */
+    OVS_ODP_EXECUTE_REMOVE_HEADER /* @P4: */
 }
 
 static bool

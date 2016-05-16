@@ -1069,6 +1069,8 @@ packet_csum_pseudoheader(const struct ip_header *ip)
 
 // @P4:
 OVS_HDR_DEFS
+
+// @P4:
 OVS_FUNC_DEFS
 
 // @P4:
@@ -1082,15 +1084,7 @@ void deparse(struct dp_packet *packet)
     OVS_DEPARSE_NEW_PAYLOAD_OFS
 
     /* shift payload */
-//    if (packet->payload_ofs != new_payload_ofs) {
-//        if (dp_packet_get_allocated(packet) >= (new_payload_ofs + (dp_packet_size(packet) - packet->payload_ofs))) {
-//            memmove(data + new_payload_ofs, data + packet->payload_ofs, dp_packet_size(packet) - packet->payload_ofs);
-//        }
-//        else { /* error */ }
-//
-//        dp_packet_set_size(packet, dp_packet_size(packet) + (new_payload_ofs - packet->payload_ofs));
-//        packet->payload_ofs = new_payload_ofs;
-//    }
+    OVS_DEPARSE_SHIFT_PAYLOAD
 
     /* write headers */
     uint16_t run_ofs = 0;
