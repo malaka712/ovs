@@ -1,6 +1,7 @@
 #! /bin/sh -ve
 
-DIR=~/ovs/utilities
+# Please make sure that you update the path to the current OVS directory.
+DIR=~/p4-vswitch/ovs/utilities
 
 # For this test we will pre-populate ARP caches at the end-hosts
 
