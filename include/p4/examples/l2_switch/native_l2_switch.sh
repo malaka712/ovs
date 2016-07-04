@@ -1,6 +1,7 @@
 #! /bin/sh -ve
 
-DIR=~/ovs/utilities
+# Please make sure that you update the path to the current OVS directory.
+DIR=~/p4-vswitch/ovs/utilities
 
 $DIR/ovs-ofctl --protocols=OpenFlow15 del-flows br0
 
