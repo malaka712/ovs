@@ -304,28 +304,28 @@ enum ofp_raw_action_type {
 /* ## @P4: actions. ## */
 /* ## ------------- ## */
 
-	/* OF1.5+(30): void. */
+	/* OF1.4+(30): void. */
 	OFPAT_RAW_DEPARSE,
 
-	/* OF1.5+(31): uint32_t. */
+	/* OF1.4+(31): uint32_t. */
 	OFPAT_RAW_ADD_HEADER,
 
-	/* OF1.5+(32): uint32_t. */
+	/* OF1.4+(32): uint32_t. */
 	OFPAT_RAW_REMOVE_HEADER,
 
-	/* OF1.5+(33): void. */
+	/* OF1.4+(33): void. */
 	OFPAT_RAW_MODIFY_FIELD,
 
-	/* OF1.5+(34): struct ofp_action_calc_fields, ... */
+	/* OF1.4+(34): struct ofp_action_calc_fields, ... */
 	OFPAT_RAW_CALC_FIELDS_VERIFY,
 
-	/* OF1.5+(35): struct ofp_action_calc_fields, ... */
+	/* OF1.4+(35): struct ofp_action_calc_fields, ... */
 	OFPAT_RAW_CALC_FIELDS_UPDATE,
 
-	/* OF1.5+(36): struct ofp_action_add_to_field, ... */
+	/* OF1.4+(36): struct ofp_action_add_to_field, ... */
 	OFPAT_RAW_ADD_TO_FIELD,
 
-	/* OF1.5+(37): struct ofp_action_sub_from_field, ... */
+	/* OF1.4+(37): struct ofp_action_sub_from_field, ... */
 	OFPAT_RAW_SUB_FROM_FIELD,
 
 #include "p4/src/action/types.h" // @P4:
@@ -817,7 +817,7 @@ static void
 encode_DEPARSE(const struct ofpact_null *null OVS_UNUSED,
                enum ofp_version ofp_version, struct ofpbuf *out)
 {
-    if (ofp_version >= OFP15_VERSION) {
+    if (ofp_version >= OFP14_VERSION) {
         put_OFPAT_DEPARSE(out);
     }
 }
@@ -852,7 +852,7 @@ static void
 encode_ADD_HEADER(const struct ofpact_add_header *ah,
                   enum ofp_version ofp_version, struct ofpbuf *out)
 {
-    if (ofp_version >= OFP15_VERSION) {
+    if (ofp_version >= OFP14_VERSION) {
     	put_OFPAT_ADD_HEADER(out, ah->header_id);
     }
 }
@@ -894,7 +894,7 @@ static void
 encode_REMOVE_HEADER(const struct ofpact_remove_header *rh,
                      enum ofp_version ofp_version, struct ofpbuf *out)
 {
-	if (ofp_version >= OFP15_VERSION) {
+	if (ofp_version >= OFP14_VERSION) {
 		put_OFPAT_REMOVE_HEADER(out, rh->header_id);
 	}
 }
@@ -931,7 +931,7 @@ static void
 encode_MODIFY_FIELD(const struct ofpact_set_field *sf,
                     enum ofp_version ofp_version, struct ofpbuf *out)
 {
-    if (ofp_version >= OFP15_VERSION) {
+    if (ofp_version >= OFP14_VERSION) {
         set_field_to_set_field(sf, ofp_version, out);
     }
 }
@@ -1021,7 +1021,7 @@ static void
 encode_CALC_FIELDS_VERIFY(const struct ofpact_calc_fields *cf,
                           enum ofp_version ofp_version OVS_UNUSED, struct ofpbuf *out)
 {
-    if (ofp_version >= OFP15_VERSION) {
+    if (ofp_version >= OFP14_VERSION) {
         int fields_len = ROUND_UP(2 * cf->n_fields, OFP_ACTION_ALIGN);
         struct ofp_action_calc_fields *a;
         ovs_be16 *src_field_ids;
@@ -1206,7 +1206,7 @@ static void
 encode_CALC_FIELDS_UPDATE(const struct ofpact_calc_fields *cf,
                           enum ofp_version ofp_version OVS_UNUSED, struct ofpbuf *out)
 {
-    if (ofp_version >= OFP15_VERSION) {
+    if (ofp_version >= OFP14_VERSION) {
         int fields_len = ROUND_UP(2 * cf->n_fields, OFP_ACTION_ALIGN);
         struct ofp_action_calc_fields *a;
         ovs_be16 *src_field_ids;
@@ -1400,7 +1400,7 @@ static void
 encode_ADD_TO_FIELD(const struct ofpact_add_to_field *atf,
                     enum ofp_version ofp_version, struct ofpbuf *out)
 {
-    if (ofp_version >= OFP15_VERSION) {
+    if (ofp_version >= OFP14_VERSION) {
         struct ofp_action_add_to_field *a OVS_UNUSED;
         size_t start_ofs = out->size;
 
@@ -1537,7 +1537,7 @@ static void
 encode_SUB_FROM_FIELD(const struct ofpact_sub_from_field *sff,
                       enum ofp_version ofp_version, struct ofpbuf *out)
 {
-    if (ofp_version >= OFP15_VERSION) {
+    if (ofp_version >= OFP14_VERSION) {
         struct ofp_action_sub_from_field *a OVS_UNUSED;
         size_t start_ofs = out->size;
 
