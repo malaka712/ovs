@@ -958,9 +958,13 @@ format_MODIFY_FIELD(const struct ofpact_set_field *sf OVS_UNUSED,
 //	     2. handle metadata fields.
 struct ofp_action_calc_payload {
     uint8_t is_field;
+    ovs_be32 size;
     union {
         ovs_be16 field_id;
-        ovs_be32 val;
+        uint8_t u8;
+        ovs_be16 be16;
+        ovs_be32 be32;
+        ovs_be64 be64;
     };
 };
 
@@ -1019,7 +1023,14 @@ decode_calc_fields_verify(const struct ofp_action_calc_fields *a,
         }
         else {
             cfield.is_field = false;
-            cfield.val = ntohl(ap.val);
+            cfield.size = htonl(ap.size);
+            switch (cfield.size)
+            {
+                case 8: cfield.u8 = ap.u8; break;
+                case 16: cfield.u16 = ntohs(ap.be16); break;
+                case 32: cfield.u32 = ntohl(ap.be32); break;
+                case 64: cfield.u64 = ntohll(ap.be64); break;
+            }
         }
         ofpbuf_put(ofpacts, &cfield, sizeof(struct ofpact_calc_field));
     }
@@ -1061,7 +1072,14 @@ encode_CALC_FIELDS_VERIFY(const struct ofpact_calc_fields *cf,
                 src_fields[i].field_id = htons(cf->src_fields[i].field_id);
             }
             else {
-                src_fields[i].val = htonl(cf->src_fields[i].val);
+                src_fields[i].size = htonl(cf->src_fields[i].size);
+                switch (cf->src_fields[i].size)
+                {
+                    case 8: src_fields[i].u8 = cf->src_fields[i].u8; break;
+                    case 16: src_fields[i].be16 = htons(cf->src_fields[i].u16); break;
+                    case 32: src_fields[i].be32 = htonl(cf->src_fields[i].u32); break;
+                    case 64: src_fields[i].be64 = htonll(cf->src_fields[i].u64); break;
+                }
             }
         }
     }
@@ -1088,7 +1106,7 @@ calc_fields_verify_parse__(const char *s, char **save_ptr,
 
     for (;;) {
         char *src_field, *ptr;
-        uint32_t val;
+        size_t size;
         struct ofpact_calc_field cfield;
 
         src_field = strtok_r(NULL, ", []", save_ptr);
@@ -1100,10 +1118,19 @@ calc_fields_verify_parse__(const char *s, char **save_ptr,
             cf->has_payload = true;
         }
         else {
-            val = strtol(src_field, &ptr, 16);
-            if (!strcmp(ptr, "")) {
+            size = strtol(src_field, &ptr, 16);
+            if (strlen(ptr) < strlen(src_field)) {
+                src_field = ++ptr;
                 cfield.is_field = false;
-                cfield.val = val;
+                cfield.size = size;
+                switch (size)
+                {
+                    case 8: cfield.u8 = strtol(src_field, &ptr, 16); break;
+                    case 16: cfield.u16 = strtol(src_field, &ptr, 16); break;
+                    case 32: cfield.u32 = strtol(src_field, &ptr, 16); break;
+                    case 64: cfield.u64 = strtol(src_field, &ptr, 16); break;
+                    default: return xasprintf("invalid value (or size) `%x'", size);
+                }
             } else {
                 cfield.is_field = true;
                 cfield.field_id = mf_from_name(src_field)->id;
@@ -1187,8 +1214,14 @@ calc_fields_verify_format(const struct ofpact_calc_fields *cf, struct ds *s)
         }
         else
         {
-            val = cf->src_fields[i].val;
-            ds_put_format(s, "0x%x", val);
+            switch (cf->src_fields[i].size)
+            {
+                case 8: ds_put_format(s, "0x%x'0x%x", cf->src_fields[i].size, cf->src_fields[i].u8); break;
+                case 16: ds_put_format(s, "0x%x'0x%x", cf->src_fields[i].size, cf->src_fields[i].u16); break;
+                case 32: ds_put_format(s, "0x%x'0x%x", cf->src_fields[i].size, cf->src_fields[i].u32); break;
+                case 64: ds_put_format(s, "0x%x'0x%x", cf->src_fields[i].size, cf->src_fields[i].u64); break;
+                default: ds_put_cstr(s, "<unknown>");
+            }
         }
     }
 
@@ -1251,7 +1284,14 @@ decode_calc_fields_update(const struct ofp_action_calc_fields *a,
         }
         else {
             cfield.is_field = false;
-            cfield.val = ntohl(ap.val);
+            cfield.size = htonl(ap.size);
+            switch (cfield.size)
+            {
+                case 8: cfield.u8 = ap.u8; break;
+                case 16: cfield.u16 = ntohs(ap.be16); break;
+                case 32: cfield.u32 = ntohl(ap.be32); break;
+                case 64: cfield.u64 = ntohll(ap.be64); break;
+            }
         }
         ofpbuf_put(ofpacts, &cfield, sizeof(struct ofpact_calc_field));
     }
@@ -1293,7 +1333,14 @@ encode_CALC_FIELDS_UPDATE(const struct ofpact_calc_fields *cf,
                 src_fields[i].field_id = htons(cf->src_fields[i].field_id);
             }
             else {
-                src_fields[i].val = htonl(cf->src_fields[i].val);
+                src_fields[i].size = htonl(cf->src_fields[i].size);
+                switch (cf->src_fields[i].size)
+                {
+                    case 8: src_fields[i].u8 = cf->src_fields[i].u8; break;
+                    case 16: src_fields[i].be16 = htons(cf->src_fields[i].u16); break;
+                    case 32: src_fields[i].be32 = htonl(cf->src_fields[i].u32); break;
+                    case 64: src_fields[i].be64 = htonll(cf->src_fields[i].u64); break;
+                }
             }
         }
     }
@@ -1320,7 +1367,7 @@ calc_fields_update_parse__(const char *s, char **save_ptr,
 
     for (;;) {
         char *src_field, *ptr;
-        uint32_t val;
+        size_t size;
         struct ofpact_calc_field cfield;
 
         src_field = strtok_r(NULL, ", []", save_ptr);
@@ -1332,10 +1379,19 @@ calc_fields_update_parse__(const char *s, char **save_ptr,
             cf->has_payload = true;
         }
         else {
-            val = strtol(src_field, &ptr, 16);
-            if (!strcmp(ptr, "")) {
+            size = strtol(src_field, &ptr, 16);
+            if (strlen(ptr) < strlen(src_field)) {
+                src_field = ++ptr;
                 cfield.is_field = false;
-                cfield.val = val;
+                cfield.size = size;
+                switch (size)
+                {
+                    case 8: cfield.u8 = strtol(src_field, &ptr, 16); break;
+                    case 16: cfield.u16 = strtol(src_field, &ptr, 16); break;
+                    case 32: cfield.u32 = strtol(src_field, &ptr, 16); break;
+                    case 64: cfield.u64 = strtol(src_field, &ptr, 16); break;
+                    default: return xasprintf("invalid value (or size) `%x'", size);
+                }
             } else {
                 cfield.is_field = true;
                 cfield.field_id = mf_from_name(src_field)->id;
@@ -1419,8 +1475,14 @@ calc_fields_update_format(const struct ofpact_calc_fields *cf, struct ds *s)
         }
         else
         {
-            val = cf->src_fields[i].val;
-            ds_put_format(s, "0x%x", val);
+            switch (cf->src_fields[i].size)
+            {
+                case 8: ds_put_format(s, "0x%x'0x%x", cf->src_fields[i].size, cf->src_fields[i].u8); break;
+                case 16: ds_put_format(s, "0x%x'0x%x", cf->src_fields[i].size, cf->src_fields[i].u16); break;
+                case 32: ds_put_format(s, "0x%x'0x%x", cf->src_fields[i].size, cf->src_fields[i].u32); break;
+                case 64: ds_put_format(s, "0x%x'0x%x", cf->src_fields[i].size, cf->src_fields[i].u64); break;
+                default: ds_put_cstr(s, "<unknown>");
+            }
         }
     }
 

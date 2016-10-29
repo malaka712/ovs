@@ -779,9 +779,13 @@ enum cf_algorithm {
  */
 struct ofpact_calc_field {
     bool is_field;
+    size_t size;
     union {
         enum mf_field_id field_id;
-        uint32_t val;
+        uint8_t u8;
+        uint16_t u16;
+        uint32_t u32;
+        uint64_t u64;
     };
 };
 

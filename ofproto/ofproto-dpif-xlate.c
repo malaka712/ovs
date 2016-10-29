@@ -61,6 +61,7 @@
 
 // @P4:
 #include "p4/src/action/ofproto/ofproto-dpif-xlate.h"
+#include "../lib/ofp-actions.h"
 
 COVERAGE_DEFINE(xlate_actions);
 COVERAGE_DEFINE(xlate_actions_oversize);
@@ -4151,6 +4152,7 @@ compose_calc_fields_verify(struct xlate_ctx *ctx,
     ctx->xout->slow |= commit_odp_actions(&ctx->xin->flow, &ctx->base_flow,
                                           ctx->odp_actions, ctx->wc,
                                           use_masked);
+    struct ofpact_calc_field cfield;
 
     size_t i;
     size_t offset = nl_msg_start_nested(ctx->odp_actions,
@@ -4174,19 +4176,45 @@ compose_calc_fields_verify(struct xlate_ctx *ctx,
     }
 
     nl_msg_put_u16(ctx->odp_actions, OVS_CALC_FIELD_ATTR_UNSPEC, cf->n_fields);
+    nl_msg_put_u8(ctx->odp_actions, OVS_CALC_FIELD_ATTR_UNSPEC, cf->has_payload);
 
     size_t f_offset = nl_msg_start_nested(ctx->odp_actions,
                                           OVS_CALC_FIELD_ATTR_UNSPEC);
 
-//    for (i = 0; i < cf->n_fields; i++) {
-//        switch (cf->src_field_ids[i]) {
-//        OVS_COMPOSE_CALC_FIELDS_CASES
-//
-//        case MFF_N_IDS:
-//        default:
-//            OVS_NOT_REACHED();
-//        }
-//    }
+    for (i = 0; i < cf->n_fields; i++) {
+        cfield = cf->src_fields[i];
+        if (cfield.is_field) {
+            switch (cfield.field_id) {
+                OVS_COMPOSE_CALC_FIELDS_CASES
+
+                case MFF_N_IDS:
+                default:
+                    OVS_NOT_REACHED();
+            }
+        }
+        else {
+            size_t g_offset = nl_msg_start_nested(ctx->odp_actions,
+                                                  OVS_CALC_FIELD_ATTR_NUMBER);
+            nl_msg_put_u32(ctx->odp_actions, OVS_CALC_FIELD_ATTR_UNSPEC, cfield.size);
+            switch (cfield.size) {
+                case 8:
+                    nl_msg_put_u8(ctx->odp_actions, OVS_CALC_FIELD_ATTR_UNSPEC, cfield.u8);
+                    break;
+                case 16:
+                    nl_msg_put_be16(ctx->odp_actions, OVS_CALC_FIELD_ATTR_UNSPEC, htons(cfield.u16));
+                    break;
+                case 32:
+                    nl_msg_put_be32(ctx->odp_actions, OVS_CALC_FIELD_ATTR_UNSPEC, htonl(cfield.u32));
+                    break;
+                case 64:
+                    nl_msg_put_be64(ctx->odp_actions, OVS_CALC_FIELD_ATTR_UNSPEC, htonll(cfield.u64));
+                    break;
+                default:
+                    OVS_NOT_REACHED();
+            }
+            nl_msg_end_nested(ctx->odp_actions, g_offset);
+        }
+    }
 
     nl_msg_end_nested(ctx->odp_actions, f_offset);
     nl_msg_end_nested(ctx->odp_actions, offset);
@@ -4203,6 +4231,7 @@ compose_calc_fields_update(struct xlate_ctx *ctx,
     ctx->xout->slow |= commit_odp_actions(&ctx->xin->flow, &ctx->base_flow,
                                           ctx->odp_actions, ctx->wc,
                                           use_masked);
+    struct ofpact_calc_field cfield;
 
     size_t i;
     size_t offset = nl_msg_start_nested(ctx->odp_actions,
@@ -4226,19 +4255,45 @@ compose_calc_fields_update(struct xlate_ctx *ctx,
     }
 
     nl_msg_put_u16(ctx->odp_actions, OVS_CALC_FIELD_ATTR_UNSPEC, cf->n_fields);
+    nl_msg_put_u8(ctx->odp_actions, OVS_CALC_FIELD_ATTR_UNSPEC, cf->has_payload);
 
     size_t f_offset = nl_msg_start_nested(ctx->odp_actions,
                                           OVS_CALC_FIELD_ATTR_UNSPEC);
 
-//    for (i = 0; i < cf->n_fields; i++) {
-//        switch (cf->src_field_ids[i]) {
-//        OVS_COMPOSE_CALC_FIELDS_CASES
-//
-//        case MFF_N_IDS:
-//        default:
-//            OVS_NOT_REACHED();
-//        }
-//    }
+    for (i = 0; i < cf->n_fields; i++) {
+        cfield = cf->src_fields[i];
+        if (cfield.is_field) {
+            switch (cfield.field_id) {
+                OVS_COMPOSE_CALC_FIELDS_CASES
+
+                case MFF_N_IDS:
+                default:
+                    OVS_NOT_REACHED();
+            }
+        }
+        else {
+            size_t g_offset = nl_msg_start_nested(ctx->odp_actions,
+                                                  OVS_CALC_FIELD_ATTR_NUMBER);
+            nl_msg_put_u32(ctx->odp_actions, OVS_CALC_FIELD_ATTR_UNSPEC, cfield.size);
+            switch (cfield.size) {
+                case 8:
+                    nl_msg_put_u8(ctx->odp_actions, OVS_CALC_FIELD_ATTR_UNSPEC, cfield.u8);
+                    break;
+                case 16:
+                    nl_msg_put_be16(ctx->odp_actions, OVS_CALC_FIELD_ATTR_UNSPEC, htons(cfield.u16));
+                    break;
+                case 32:
+                    nl_msg_put_be32(ctx->odp_actions, OVS_CALC_FIELD_ATTR_UNSPEC, htonl(cfield.u32));
+                    break;
+                case 64:
+                    nl_msg_put_be64(ctx->odp_actions, OVS_CALC_FIELD_ATTR_UNSPEC, htonll(cfield.u64));
+                    break;
+                default:
+                    OVS_NOT_REACHED();
+            }
+            nl_msg_end_nested(ctx->odp_actions, g_offset);
+        }
+    }
 
     nl_msg_end_nested(ctx->odp_actions, f_offset);
     nl_msg_end_nested(ctx->odp_actions, offset);
