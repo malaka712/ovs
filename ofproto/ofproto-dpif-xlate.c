@@ -4178,15 +4178,15 @@ compose_calc_fields_verify(struct xlate_ctx *ctx,
     size_t f_offset = nl_msg_start_nested(ctx->odp_actions,
                                           OVS_CALC_FIELD_ATTR_UNSPEC);
 
-    for (i = 0; i < cf->n_fields; i++) {
-        switch (cf->src_field_ids[i]) {
-        OVS_COMPOSE_CALC_FIELDS_CASES
-
-        case MFF_N_IDS:
-        default:
-            OVS_NOT_REACHED();
-        }
-    }
+//    for (i = 0; i < cf->n_fields; i++) {
+//        switch (cf->src_field_ids[i]) {
+//        OVS_COMPOSE_CALC_FIELDS_CASES
+//
+//        case MFF_N_IDS:
+//        default:
+//            OVS_NOT_REACHED();
+//        }
+//    }
 
     nl_msg_end_nested(ctx->odp_actions, f_offset);
     nl_msg_end_nested(ctx->odp_actions, offset);
@@ -4230,15 +4230,15 @@ compose_calc_fields_update(struct xlate_ctx *ctx,
     size_t f_offset = nl_msg_start_nested(ctx->odp_actions,
                                           OVS_CALC_FIELD_ATTR_UNSPEC);
 
-    for (i = 0; i < cf->n_fields; i++) {
-        switch (cf->src_field_ids[i]) {
-        OVS_COMPOSE_CALC_FIELDS_CASES
-
-        case MFF_N_IDS:
-        default:
-            OVS_NOT_REACHED();
-        }
-    }
+//    for (i = 0; i < cf->n_fields; i++) {
+//        switch (cf->src_field_ids[i]) {
+//        OVS_COMPOSE_CALC_FIELDS_CASES
+//
+//        case MFF_N_IDS:
+//        default:
+//            OVS_NOT_REACHED();
+//        }
+//    }
 
     nl_msg_end_nested(ctx->odp_actions, f_offset);
     nl_msg_end_nested(ctx->odp_actions, offset);
