@@ -777,12 +777,25 @@ enum cf_algorithm {
 // @P4:
 /* OFPACT_CALC_FIELDS.
  */
+struct ofpact_calc_field {
+    bool is_field;
+    size_t size;
+    union {
+        enum mf_field_id field_id;
+        uint8_t u8;
+        uint16_t u16;
+        uint32_t u32;
+        uint64_t u64;
+    };
+};
+
 struct ofpact_calc_fields {
     struct ofpact ofpact;
     enum mf_field_id dst_field_id;
     enum cf_algorithm algorithm;
     unsigned int n_fields;
-    enum mf_field_id src_field_ids[];
+    bool has_payload;
+    struct ofpact_calc_field src_fields[];
 };
 
 // @P4:

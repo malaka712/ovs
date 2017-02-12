@@ -490,23 +490,65 @@ static bool
 odp_execute_calc_fields_verify(struct dp_packet *packet,
                                const struct nlattr *a)
 {
+    char *data = dp_packet_data(packet);
     enum ovs_calc_field_attr dst_field_key = nl_attr_type(a); a = nl_attr_next(a);
     enum ovs_cf_algorithm algorithm = nl_attr_get_u16(a);     a = nl_attr_next(a);
     uint16_t n_fields = nl_attr_get_u16(a);                   a = nl_attr_next(a);
+    uint8_t has_payload = nl_attr_get_u8(a);                  a = nl_attr_next(a);
 
-    const struct nlattr *a_;
-    size_t left, n_bytes;
+    const struct nlattr *a_, *a__;
+    size_t left, left_, n_bytes;
     uint8_t *buf = calc_fields_verify_buf;
 
-    NL_NESTED_FOR_EACH_UNSAFE(a_, left, a){
+    NL_NESTED_FOR_EACH_UNSAFE(a_, left, a) {
         switch ((enum ovs_calc_field_attr) nl_attr_type(a_)) {
         OVS_ODP_EXECUTE_CALC_FIELDS_SRCS_CASES
+
+        case OVS_CALC_FIELD_ATTR_NUMBER: {
+            a__ = nl_attr_get(a_);
+            size_t size = nl_attr_get_u32(a__);
+            a__ = nl_attr_next(a__);
+            switch (size) {
+                case 8: {
+                    uint8_t u8 = nl_attr_get_u8(a__);
+                    memcpy(buf, &u8, sizeof(uint8_t));
+                    buf += sizeof(uint8_t);
+                    break;
+                }
+                case 16: {
+                    ovs_be16 be16 = nl_attr_get_be16(a__);
+                    memcpy(buf, &be16, sizeof(ovs_be16));
+                    buf += sizeof(ovs_be16);
+                    break;
+                }
+                case 32: {
+                    ovs_be32 be32 = nl_attr_get_be32(a__);
+                    memcpy(buf, &be32, sizeof(ovs_be32));
+                    buf += sizeof(ovs_be32);
+                    break;
+                }
+                case 64: {
+                    ovs_be64 be64 = nl_attr_get_be64(a__);
+                    memcpy(buf, &be64, sizeof(ovs_be64));
+                    buf += sizeof(ovs_be64);
+                    break;
+                }
+                default:
+                    OVS_NOT_REACHED();
+            }
+            break;
+        }
 
         case OVS_CALC_FIELD_ATTR_UNSPEC:
         case __OVS_CALC_FIELD_ATTR_MAX:
         default:
             OVS_NOT_REACHED();
         }
+    }
+
+    if (has_payload) {
+        memcpy(buf, data + packet->payload_ofs, dp_packet_size(packet) - packet->payload_ofs);
+        buf += dp_packet_size(packet) - packet->payload_ofs;
     }
 
     n_bytes = buf - calc_fields_verify_buf;
@@ -539,23 +581,65 @@ static void
 odp_execute_calc_fields_update(struct dp_packet *packet,
                                const struct nlattr *a)
 {
+    char *data = dp_packet_data(packet);
     enum ovs_calc_field_attr dst_field_key = nl_attr_type(a); a = nl_attr_next(a);
     enum ovs_cf_algorithm algorithm = nl_attr_get_u16(a);     a = nl_attr_next(a);
     uint16_t n_fields = nl_attr_get_u16(a);                   a = nl_attr_next(a);
+    uint8_t has_payload = nl_attr_get_u8(a);                  a = nl_attr_next(a);
 
-    const struct nlattr *a_;
+    const struct nlattr *a_, *a__;
     size_t left, n_bytes;
     uint8_t *buf = calc_fields_update_buf;
 
-    NL_NESTED_FOR_EACH_UNSAFE(a_, left, a){
+    NL_NESTED_FOR_EACH_UNSAFE(a_, left, a) {
         switch ((enum ovs_calc_field_attr) nl_attr_type(a_)) {
         OVS_ODP_EXECUTE_CALC_FIELDS_SRCS_CASES
+
+        case OVS_CALC_FIELD_ATTR_NUMBER: {
+            a__ = nl_attr_get(a_);
+            size_t size = nl_attr_get_u32(a__);
+            a__ = nl_attr_next(a__);
+            switch (size) {
+                case 8: {
+                    uint8_t u8 = nl_attr_get_u8(a__);
+                    memcpy(buf, &u8, sizeof(uint8_t));
+                    buf += sizeof(uint8_t);
+                    break;
+                }
+                case 16: {
+                    ovs_be16 be16 = nl_attr_get_be16(a__);
+                    memcpy(buf, &be16, sizeof(ovs_be16));
+                    buf += sizeof(ovs_be16);
+                    break;
+                }
+                case 32: {
+                    ovs_be32 be32 = nl_attr_get_be32(a__);
+                    memcpy(buf, &be32, sizeof(ovs_be32));
+                    buf += sizeof(ovs_be32);
+                    break;
+                }
+                case 64: {
+                    ovs_be64 be64 = nl_attr_get_be64(a__);
+                    memcpy(buf, &be64, sizeof(ovs_be64));
+                    buf += sizeof(ovs_be64);
+                    break;
+                }
+                default:
+                    OVS_NOT_REACHED();
+            }
+            break;
+        }
 
         case OVS_CALC_FIELD_ATTR_UNSPEC:
         case __OVS_CALC_FIELD_ATTR_MAX:
         default:
             OVS_NOT_REACHED();
         }
+    }
+
+    if (has_payload) {
+        memcpy(buf, data + packet->payload_ofs, dp_packet_size(packet) - packet->payload_ofs);
+        buf += dp_packet_size(packet) - packet->payload_ofs;
     }
 
     n_bytes = buf - calc_fields_update_buf;
